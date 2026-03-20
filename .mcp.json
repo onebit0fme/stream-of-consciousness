@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stream": {
+      "command": "node",
+      "args": ["build/index.js"]
+    }
+  }
+}
