@@ -1,7 +1,7 @@
 {
   "name": "stream-of-consciousness",
   "version": "1.0.0",
-  "description": "Stream of Consciousness — a minimalist productivity system with time-based decay, powered by MCP",
+  "description": "Claude Code plugin — a minimalist productivity system with time-based decay",
   "main": "build/index.js",
   "bin": {
     "stream-of-consciousness": "build/index.js"

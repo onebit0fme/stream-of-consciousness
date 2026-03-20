@@ -1,8 +1,10 @@
 # Stream of Consciousness
 
-A minimalist productivity system for Claude Code. Items flow in, decay over time, and either get resolved or restreamed. No tags, no priorities, no categories — just type, content, and time.
+A Claude Code plugin for neurodivergent brains.
 
-Designed for brains that don't do well with traditional task managers.
+Core philosophy to externalize the flow without enforcing any rigid structure that adds maintenance burden. The system is the flow, which means it doesn't try to *organize* your brain. Instead, it works *with* it. The stream has no fixed state, no concept of project, to-do or done. It is moment-to-moment system with build-in mechanism to eradicate clutter. Items flow in, decay over time, and either get resolved or restreamed. Continuity by design, embraced impermanence.
+
+Designed for brains that don't do well with traditional task management systems.
 
 ## How it works
 
