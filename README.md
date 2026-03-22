@@ -25,9 +25,9 @@ Items don't get "done" — they **leave the stream** (resolved) or get **restrea
 
 ```bash
 git clone https://github.com/onebit0fme/stream-of-consciousness.git
-cd stream
+cd stream-of-consciousness
 npm install
-claude plugin add ./
+claude --plugin-dir ./
 ```
 
 ### As a standalone MCP server
@@ -82,7 +82,7 @@ The server exposes 4 tools that can be used by any MCP client:
 
 ```bash
 git clone https://github.com/onebit0fme/stream-of-consciousness.git
-cd stream
+cd stream-of-consciousness
 npm install
 npm run build
 ```

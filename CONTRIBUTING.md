@@ -16,7 +16,7 @@ After editing `src/index.ts`, run `npm run build`. Claude Code picks up the new 
 To test as a local plugin:
 
 ```bash
-claude plugin add ./
+claude --plugin-dir ./
 ```
 
 ## Pull requests
