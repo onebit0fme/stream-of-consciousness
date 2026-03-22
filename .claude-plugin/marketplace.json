@@ -1,0 +1,27 @@
+{
+  "name": "stream-of-consciousness",
+  "owner": {
+    "name": "Taras Yanchynskyy",
+    "url": "https://github.com/onebit0fme"
+  },
+  "plugins": [
+    {
+      "name": "stream-of-consciousness",
+      "description": "A minimalist productivity system with time-based decay — designed for neurodivergent brains",
+      "source": "./",
+      "author": {
+        "name": "Taras Yanchynskyy",
+        "url": "https://github.com/onebit0fme"
+      },
+      "homepage": "https://github.com/onebit0fme/stream-of-consciousness",
+      "license": "MIT",
+      "tags": [
+        "productivity",
+        "task-management",
+        "mcp",
+        "adhd",
+        "neurodivergent"
+      ]
+    }
+  ]
+}

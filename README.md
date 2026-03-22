@@ -19,30 +19,32 @@ Everything in the stream has a **type** and a **decay period**:
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- [Claude Code](https://claude.com/download)
+
 ## Install
 
 ### As a Claude Code plugin
 
-```bash
-git clone https://github.com/onebit0fme/stream-of-consciousness.git
-cd stream-of-consciousness
-npm install
-claude --plugin-dir ./
+In Claude Code, run:
+
+```
+/plugin marketplace add onebit0fme/stream-of-consciousness
+/plugin install stream-of-consciousness
 ```
 
 ### As a standalone MCP server
 
-```bash
-npm install -g stream-of-consciousness
-```
-
-Then add to your Claude Code MCP config (`~/.claude/settings.json`):
+Add to your Claude Code MCP config (`~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "stream": {
-      "command": "stream-of-consciousness"
+      "command": "npx",
+      "args": ["-y", "stream-of-consciousness"]
     }
   }
 }
@@ -102,7 +104,8 @@ After editing `src/index.ts`, run `npm run build`. Claude Code picks up the new 
 │   ├── attention/SKILL.md — /stream:attention
 │   └── halflife/SKILL.md  — /stream:halflife
 ├── .claude-plugin/
-│   └── plugin.json        — plugin manifest
+│   ├── plugin.json        — plugin manifest
+│   └── marketplace.json   — marketplace catalog
 ├── .mcp.json              — MCP server config
 ├── package.json
 └── tsconfig.json
