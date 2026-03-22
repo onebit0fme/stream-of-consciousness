@@ -2,7 +2,10 @@
   "name": "stream-of-consciousness",
   "description": "Stream of Consciousness — a minimalist productivity system with time-based decay",
   "version": "1.0.0",
-  "author": "Taras Yanchynskyy",
+  "author": {
+    "name": "Taras Yanchynskyy",
+    "url": "https://github.com/onebit0fme"
+  },
   "homepage": "https://github.com/onebit0fme/stream-of-consciousness",
   "repository": "https://github.com/onebit0fme/stream-of-consciousness",
   "license": "MIT"
