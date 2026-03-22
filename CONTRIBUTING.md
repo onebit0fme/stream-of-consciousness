@@ -16,7 +16,7 @@ After editing `src/index.ts`, run `npm run build`. Claude Code picks up the new 
 To test as a local plugin:
 
 ```bash
-claude --plugin-dir ./
+claude --plugin-dir ./plugins/stream-of-consciousness
 ```
 
 ## Pull requests

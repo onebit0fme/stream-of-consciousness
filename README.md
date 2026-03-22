@@ -94,19 +94,14 @@ After editing `src/index.ts`, run `npm run build`. Claude Code picks up the new 
 ## Project structure
 
 ```
-├── src/index.ts           — MCP server source
-├── skills/
-│   ├── stream/SKILL.md    — background skill (auto-activates)
-│   ├── add/SKILL.md       — /stream:add
-│   ├── resolve/SKILL.md   — /stream:resolve
-│   ├── restream/SKILL.md  — /stream:restream
-│   ├── flow/SKILL.md      — /stream:flow
-│   ├── attention/SKILL.md — /stream:attention
-│   └── halflife/SKILL.md  — /stream:halflife
+├── src/index.ts                        — MCP server source
+├── plugins/
+│   └── stream-of-consciousness/        — Claude Code plugin
+│       ├── plugin.json                 — plugin manifest
+│       ├── .mcp.json                   — MCP server config
+│       └── skills/                     — slash commands & background skill
 ├── .claude-plugin/
-│   ├── plugin.json        — plugin manifest
-│   └── marketplace.json   — marketplace catalog
-├── .mcp.json              — MCP server config
+│   └── marketplace.json                — marketplace catalog
 ├── package.json
 └── tsconfig.json
 ```
