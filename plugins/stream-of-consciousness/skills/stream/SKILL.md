@@ -48,6 +48,25 @@ The stream is the source of truth — not your context window. Do not hold conte
 
 Do not batch. Do not defer. Do not maintain your own tracking tables or summaries. The stream of resolved and added items **is** the record of what happened.
 
+### Bias to action
+
+**Do not ask for permission to act on the stream. Just act.** The stream is low-stakes and fully reversible — every action can be undone or restreamed. Asking "want me to resolve this?" or "should I restream?" adds friction and breaks flow.
+
+**Resolve by default when something is clearly done.** Don't ask "want me to resolve this?" — if it's done, resolve it. A merged PR, a closed ticket, a finished task — these leave the stream. Done means gone.
+
+**Restream by default when anything changes about an item that's still in flight.** These are all cues to restream immediately, without asking:
+- The user shares a progress update or new context about an existing item
+- An item's scope, framing, or understanding has changed through conversation
+- A thought has crystallized into a task or idea
+- An item's type should change (e.g., an idea becomes a task, a task becomes an output that still needs delivery)
+- New details, links, or references are mentioned that belong on an existing item
+
+**Restream ≠ resolve.** Restreaming keeps the item in the stream with a new version. Only restream if the item still has life — there's more to do, track, or deliver. If the work is finished and there's nothing left to track, resolve it instead.
+
+**Add by default when the user mentions something new.** If they bring up a new task, thought, or idea in conversation, capture it. Don't ask "want me to add this to the stream?" — just add it.
+
+The only time to pause and ask is when the intent is genuinely ambiguous — you can't tell which item they mean, or whether something is new vs. an update to something existing. Even then, prefer making your best guess and acting over asking.
+
 ### When the user asks about their stream
 
 1. Call `stream_query` to see what's in the stream (use filters as appropriate)
