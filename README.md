@@ -21,7 +21,7 @@ Items don't get "done" — they **leave the stream** (resolved) or get **restrea
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+
+- [Node.js](https://nodejs.org/) 20.18.1+
 - [Claude Code](https://claude.com/download)
 
 ## Install
@@ -44,15 +44,47 @@ Add to your Claude Code MCP config (`~/.claude/settings.json`):
   "mcpServers": {
     "stream": {
       "command": "npx",
-      "args": ["-y", "stream-of-consciousness"]
+      "args": ["-y", "stream-of-consciousness"],
+      "env": {
+        "STREAM_BACKEND": "${STREAM_BACKEND:-file}",
+        "TODOIST_API_TOKEN": "${TODOIST_API_TOKEN}",
+        "TODOIST_PROJECT_ID": "${TODOIST_PROJECT_ID}"
+      }
     }
   }
 }
 ```
 
-### Data storage
+## Backends
 
-Your stream lives at `~/.stream-of-consciousness`. It's a single JSON file, created automatically on first use.
+The stream supports two storage backends:
+
+### File (default)
+
+Your stream lives at `~/.stream-of-consciousness`. A single JSON file, created automatically on first use. No configuration needed.
+
+### Todoist
+
+Uses the Todoist API as the full backend — items live in Todoist, visible in the mobile and web apps. Zero local state.
+
+Set these environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `STREAM_BACKEND` | Yes | Set to `"todoist"` |
+| `TODOIST_API_TOKEN` | Yes | Your [Todoist API token](https://todoist.com/help/articles/find-your-api-token-Jpzx9IIlB) |
+| `TODOIST_PROJECT_ID` | No | Scope items to a specific project. Omit to use Inbox. |
+
+**How it maps to Todoist:**
+
+| Stream concept | Todoist field |
+|---------------|---------------|
+| type (task/thought/idea/output) | priority (P1/P2/P3/P4) |
+| start date | due date |
+| deadline | deadline |
+| item ID | short unique suffix of Todoist task ID |
+
+Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original.
 
 ## Skills
 
@@ -89,19 +121,29 @@ npm install
 npm run build
 ```
 
-After editing `src/index.ts`, run `npm run build`. Claude Code picks up the new build on the next tool call (new conversation).
+To test with the Todoist backend locally, create a `.env` file with your token and run:
+
+```bash
+source .env && STREAM_BACKEND=todoist node build/index.js
+```
 
 ## Project structure
 
 ```
-├── src/index.ts                        — MCP server source
+├── src/
+│   ├── index.ts              — MCP server + tool handlers
+│   ├── types.ts              — Types and constants
+│   ├── utils.ts              — Date math, decay calculation, short IDs
+│   ├── backend.ts            — Backend interface + factory
+│   ├── file-backend.ts       — File storage backend
+│   └── todoist-backend.ts    — Todoist API backend
 ├── plugins/
-│   └── stream-of-consciousness/        — Claude Code plugin
-│       ├── plugin.json                 — plugin manifest
-│       ├── .mcp.json                   — MCP server config
-│       └── skills/                     — slash commands & background skill
+│   └── stream-of-consciousness/
+│       ├── plugin.json       — plugin manifest
+│       ├── .mcp.json         — MCP server config
+│       └── skills/           — slash commands & background skill
 ├── .claude-plugin/
-│   └── marketplace.json                — marketplace catalog
+│   └── marketplace.json      — marketplace catalog
 ├── package.json
 └── tsconfig.json
 ```

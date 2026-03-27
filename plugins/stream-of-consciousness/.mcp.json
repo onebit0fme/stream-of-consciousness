@@ -2,7 +2,12 @@
   "mcpServers": {
     "stream": {
       "command": "npx",
-      "args": ["-y", "stream-of-consciousness"]
+      "args": ["-y", "stream-of-consciousness"],
+      "env": {
+        "STREAM_BACKEND": "${STREAM_BACKEND:-file}",
+        "TODOIST_API_TOKEN": "${TODOIST_API_TOKEN}",
+        "TODOIST_PROJECT_ID": "${TODOIST_PROJECT_ID}"
+      }
     }
   }
 }

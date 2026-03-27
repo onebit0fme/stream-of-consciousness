@@ -13,7 +13,7 @@ The user wants to restream (redefine) something in their stream. Their input is:
 ## Instructions
 
 1. **Find the item:**
-   - If the input starts with a number, that's the item ID.
+   - If the input starts with an ID (number or short alphanumeric code like "h48"), that's the item ID.
    - If the input is text, call `stream_query` with the `query` parameter to find matching active items.
      - If exactly one match, use its ID.
      - If multiple matches, list them and ask the user to pick one by ID.

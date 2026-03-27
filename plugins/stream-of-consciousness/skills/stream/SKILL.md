@@ -17,7 +17,7 @@ You have access to the user's personal productivity system called **The Stream**
 
 ## MCP Tools
 
-The stream is managed via MCP tools. **Do not read or write stream.json directly.** Use these tools:
+The stream is managed exclusively via MCP tools. **Always use these tools — never access the backend directly:**
 
 | Tool               | Purpose                                              |
 |--------------------|------------------------------------------------------|
