@@ -61,13 +61,15 @@ export class TodoistBackend implements StreamBackend {
     startDate: string;
     deadline: string | null;
   }): Promise<StreamItem> {
+    // Only set due date for future start dates; items entering the stream today need no date
+    const isFuture = params.startDate > todayStr();
     const task = await this.api.addTask({
       content: params.content,
       priority: TYPE_TO_PRIORITY[params.type],
-      dueDate: params.startDate,
+      ...(isFuture ? { dueDate: params.startDate } : {}),
       ...(params.deadline ? { deadlineDate: params.deadline } : {}),
       ...(this.projectId ? { projectId: this.projectId } : {}),
-    });
+    } as Parameters<typeof this.api.addTask>[0]);
 
     // Compute display ID against all active tasks for global uniqueness
     const active = await this.fetchAllActiveTasks();
@@ -119,13 +121,14 @@ export class TodoistBackend implements StreamBackend {
         ? changes.deadline
         : oldTask.deadline?.date ?? null;
 
+    const isFuture = newStartDate > today;
     const newTask = await this.api.addTask({
       content: newContent,
       priority: TYPE_TO_PRIORITY[newType],
-      dueDate: newStartDate,
+      ...(isFuture ? { dueDate: newStartDate } : {}),
       ...(newDeadline ? { deadlineDate: newDeadline } : {}),
       ...(this.projectId ? { projectId: this.projectId } : {}),
-    });
+    } as Parameters<typeof this.api.addTask>[0]);
 
     // Add lineage comment on the new task
     try {
@@ -244,6 +247,17 @@ export class TodoistBackend implements StreamBackend {
       allTasks.push(...response.results);
       cursor = response.nextCursor;
     } while (cursor);
+
+    // Auto-clear due dates on tasks that have entered the stream (due <= today)
+    const today = todayStr();
+    const stale = allTasks.filter((t) => t.due && t.due.date <= today);
+    await Promise.all(
+      stale.map((t) =>
+        this.api.updateTask(t.id, { dueString: null }).then(() => {
+          t.due = undefined as unknown as typeof t.due;
+        }).catch(() => {}),
+      ),
+    );
 
     return allTasks;
   }

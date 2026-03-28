@@ -1,6 +1,6 @@
 {
   "name": "stream-of-consciousness",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Claude Code plugin — a minimalist productivity system with time-based decay",
   "main": "build/index.js",
   "bin": {

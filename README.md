@@ -73,16 +73,20 @@ Set these environment variables:
 |----------|----------|-------------|
 | `STREAM_BACKEND` | Yes | Set to `"todoist"` |
 | `TODOIST_API_TOKEN` | Yes | Your [Todoist API token](https://todoist.com/help/articles/find-your-api-token-Jpzx9IIlB) |
-| `TODOIST_PROJECT_ID` | No | Scope items to a specific project. Omit to use Inbox. |
+| `TODOIST_PROJECT_ID` | No | Scope items to a specific project |
+
+**Project scoping:** When `TODOIST_PROJECT_ID` is set, the stream is bound to that project — all reads and writes are scoped to it. When omitted, reads pull from all projects across your account, while new items go to Inbox. Setting a project ID is recommended for a clean, predictable stream.
 
 **How it maps to Todoist:**
 
 | Stream concept | Todoist field |
 |---------------|---------------|
 | type (task/thought/idea/output) | priority (P1/P2/P3/P4) |
-| start date | due date |
+| start date | due date (future only) |
 | deadline | deadline |
 | item ID | short unique suffix of Todoist task ID |
+
+**Date handling:** Items with a future start date get a Todoist due date so they stay out of the stream until that date arrives. Items entering the stream today (or with a past start date) have no due date set — this avoids cluttering Todoist with "overdue" markers. Any existing due dates that have reached today are automatically cleared when the stream is read.
 
 Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original.
 
