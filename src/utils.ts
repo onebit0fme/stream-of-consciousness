@@ -34,14 +34,14 @@ export function nowIso(): string {
 /**
  * Compute unique short ID suffixes for a set of items with string IDs.
  * Uses the tail of the ID since Todoist IDs share common prefixes.
- * Returns a map of full ID → shortest unique suffix (min 3 chars).
+ * Returns a map of full ID → shortest unique suffix (min 1 char).
  */
 export function computeShortIds(ids: string[]): Map<string, string> {
   const result = new Map<string, string>();
   if (ids.length === 0) return result;
 
   for (const id of ids) {
-    let len = 3;
+    let len = 1;
     while (len <= id.length) {
       const suffix = id.slice(-len);
       const collision = ids.some(

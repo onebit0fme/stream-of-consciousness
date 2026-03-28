@@ -82,6 +82,7 @@ Set these environment variables:
 | Stream concept | Todoist field |
 |---------------|---------------|
 | type (task/thought/idea/output) | priority (P1/P2/P3/P4) |
+| content | content + description (auto-split at 500 chars) |
 | start date | due date (future only) |
 | deadline | deadline |
 | item ID | short unique suffix of Todoist task ID |

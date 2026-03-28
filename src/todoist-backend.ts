@@ -28,6 +28,49 @@ const PRIORITY_TO_TYPE: Record<number, ItemType> = {
   1: "output",
 };
 
+// --- Content split/merge for Todoist's 500-char title limit ---
+// Sentinel "→" signals that the title was truncated and description holds the full text.
+
+export const CONTENT_LIMIT = 500;
+export const TRUNCATION_SENTINEL = "→";
+
+/**
+ * Split stream content into Todoist content (title) + description.
+ * - First line becomes the title; remaining lines become description.
+ * - If the first line exceeds 500 chars, truncate at 499 + "→" and
+ *   put the full original text into description.
+ */
+export function splitContent(text: string): { content: string; description: string } {
+  const newlineIdx = text.indexOf("\n");
+  const title = newlineIdx === -1 ? text : text.slice(0, newlineIdx);
+  const body = newlineIdx === -1 ? "" : text.slice(newlineIdx + 1);
+
+  if (title.length <= CONTENT_LIMIT) {
+    return { content: title, description: body };
+  }
+
+  return {
+    content: title.slice(0, CONTENT_LIMIT - 1) + TRUNCATION_SENTINEL,
+    description: text,
+  };
+}
+
+/**
+ * Merge Todoist content + description back into a single stream content string.
+ * - If title ends with "→" and description exists: description is the full text.
+ * - If description exists without sentinel: title + "\n\n" + description.
+ * - No description: just the title.
+ */
+export function mergeContent(content: string, description?: string | null): string {
+  if (!description) return content;
+
+  if (content.endsWith(TRUNCATION_SENTINEL)) {
+    return description;
+  }
+
+  return content + "\n\n" + description;
+}
+
 function taskToStreamItem(task: Task, displayId: string): StreamItem {
   const type = PRIORITY_TO_TYPE[task.priority] ?? "task";
   // Use due.date as startDate (stream semantics), fall back to addedAt date
@@ -38,7 +81,7 @@ function taskToStreamItem(task: Task, displayId: string): StreamItem {
     id: task.id,
     displayId,
     type,
-    content: task.content,
+    content: mergeContent(task.content, task.description),
     startDate,
     deadline: task.deadline?.date ?? null,
     resolvedAt: task.completedAt ?? null,
@@ -63,8 +106,10 @@ export class TodoistBackend implements StreamBackend {
   }): Promise<StreamItem> {
     // Only set due date for future start dates; items entering the stream today need no date
     const isFuture = params.startDate > todayStr();
+    const { content, description } = splitContent(params.content);
     const task = await this.api.addTask({
-      content: params.content,
+      content,
+      ...(description ? { description } : {}),
       priority: TYPE_TO_PRIORITY[params.type],
       ...(isFuture ? { dueDate: params.startDate } : {}),
       ...(params.deadline ? { deadlineDate: params.deadline } : {}),
@@ -122,8 +167,10 @@ export class TodoistBackend implements StreamBackend {
         : oldTask.deadline?.date ?? null;
 
     const isFuture = newStartDate > today;
+    const { content: splitTitle, description: splitDesc } = splitContent(newContent);
     const newTask = await this.api.addTask({
-      content: newContent,
+      content: splitTitle,
+      ...(splitDesc ? { description: splitDesc } : {}),
       priority: TYPE_TO_PRIORITY[newType],
       ...(isFuture ? { dueDate: newStartDate } : {}),
       ...(newDeadline ? { deadlineDate: newDeadline } : {}),

@@ -1,6 +1,7 @@
 .claude/
 node_modules/
 build/
+build-test/
 *.tsbuildinfo
 .DS_Store
 .env
