@@ -6,7 +6,7 @@ import { registerTools } from "./tools.js";
 
 const server = new McpServer({
   name: "stream-of-consciousness",
-  version: "1.1.0",
+  version: "1.4.0",
 });
 
 async function main() {
