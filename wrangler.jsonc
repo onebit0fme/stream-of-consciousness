@@ -1,0 +1,53 @@
+/**
+ * Cloudflare Workers deploy config for the remote MCP server.
+ *
+ * Setup before first deploy:
+ *   1. wrangler kv namespace create OAUTH_KV
+ *      → paste the returned id into kv_namespaces[0].id below
+ *   2. Register a Todoist OAuth app at
+ *      https://app.todoist.com/app/settings/integrations/app-management
+ *      with redirect URIs:
+ *        https://<your-worker-domain>/callback
+ *        http://localhost:8788/callback
+ *   3. wrangler secret put TODOIST_CLIENT_ID
+ *      wrangler secret put TODOIST_CLIENT_SECRET
+ *      wrangler secret put COOKIE_ENCRYPTION_KEY   (any random 32+ byte string)
+ *   4. wrangler deploy
+ */
+{
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "stream-of-consciousness",
+    "main": "src/worker/index.ts",
+    "compatibility_date": "2025-03-10",
+    "compatibility_flags": ["nodejs_compat", "enable_nodejs_worker_threads_module"],
+    "migrations": [
+        {
+            "new_sqlite_classes": ["StreamMCP"],
+            "tag": "v1",
+        },
+    ],
+    "durable_objects": {
+        "bindings": [
+            {
+                "class_name": "StreamMCP",
+                "name": "MCP_OBJECT",
+            },
+        ],
+    },
+    "kv_namespaces": [
+        {
+            "binding": "OAUTH_KV",
+            "id": "1694c1f732ae4432b52f4b1b16ff7159",
+        },
+    ],
+    "observability": {
+        "enabled": true,
+    },
+    "rules": [
+        { "type": "Text", "globs": ["**/*.md"], "fallthrough": true },
+    ],
+    "dev": {
+        "port": 8788,
+    },
+    "routes": [{ "pattern": "stream.quadrupley.com", "custom_domain": true }],
+}

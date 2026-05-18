@@ -89,12 +89,62 @@ function taskToStreamItem(task: Task, displayId: string): StreamItem {
   };
 }
 
+export interface TodoistBackendOptions {
+  /**
+   * When true, route HTTP through the global `fetch` instead of the SDK's
+   * default dispatcher. Required on Cloudflare Workers: the SDK detects Node
+   * via `process.versions.node` (which the `nodejs_compat` flag sets), then
+   * tries to `import('undici')` — which needs `worker_threads`/`MessagePort`
+   * that Workers doesn't ship.
+   */
+  useNativeFetch?: boolean;
+}
+
+/**
+ * Workers-compatible adapter for the Todoist SDK's `customFetch` option.
+ *
+ * Skips the SDK's default dispatcher (which lazy-imports `undici` and breaks
+ * on Cloudflare Workers — see `TodoistBackendOptions.useNativeFetch` above).
+ * Wraps the global `fetch` so the result satisfies the SDK's CustomFetchResponse
+ * shape: ok/status/statusText/headers + text()/json() that can each be called once.
+ */
+function nativeFetchAdapter(
+  url: string,
+  options?: RequestInit & { timeout?: number },
+): Promise<{
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}> {
+  const { timeout: _timeout, ...init } = options ?? {};
+  return fetch(url, init).then((resp) => {
+    const headers: Record<string, string> = {};
+    resp.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
+    // SDK calls text() OR json(), never both — no need to clone.
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      statusText: resp.statusText,
+      headers,
+      text: () => resp.text(),
+      json: () => resp.json(),
+    };
+  });
+}
+
 export class TodoistBackend implements StreamBackend {
   private api: TodoistApi;
   private projectId: string | undefined;
 
-  constructor(token: string, projectId?: string) {
-    this.api = new TodoistApi(token);
+  constructor(token: string, projectId?: string, options?: TodoistBackendOptions) {
+    this.api = options?.useNativeFetch
+      ? new TodoistApi(token, { customFetch: nativeFetchAdapter as never })
+      : new TodoistApi(token);
     this.projectId = projectId;
   }
 
@@ -116,13 +166,9 @@ export class TodoistBackend implements StreamBackend {
       ...(this.projectId ? { projectId: this.projectId } : {}),
     } as Parameters<typeof this.api.addTask>[0]);
 
-    // Compute display ID against all active tasks for global uniqueness
-    const active = await this.fetchAllActiveTasks();
-    const allIds = active.map((t) => t.id);
-    if (!allIds.includes(task.id)) allIds.push(task.id);
-    const shortIds = computeShortIds(allIds);
-
-    return taskToStreamItem(task, shortIds.get(task.id) ?? task.id.slice(-4));
+    // Skip the paginated active-set fetch on add — return an optimistic short ID
+    // (last 4 chars). The next query will canonicalize it against the full set.
+    return taskToStreamItem(task, task.id.slice(-4));
   }
 
   async resolve(id: number | string): Promise<StreamItem | null> {
@@ -187,12 +233,9 @@ export class TodoistBackend implements StreamBackend {
       // Non-fatal: lineage comment is nice-to-have
     }
 
-    // Compute display IDs with the new task included
-    const updatedIds = allIds.filter((i) => i !== oldTask.id);
-    updatedIds.push(newTask.id);
-    const shortIds = computeShortIds(updatedIds);
-
-    const oldDisplayId = computeShortIds([...allIds]).get(oldTask.id) ?? oldTask.id.slice(-4);
+    // Compute display IDs once over the union (old + new) so both render against the same set.
+    const shortIds = computeShortIds([...allIds, newTask.id]);
+    const oldDisplayId = shortIds.get(oldTask.id) ?? oldTask.id.slice(-4);
     const newDisplayId = shortIds.get(newTask.id) ?? newTask.id.slice(-4);
 
     const oldItem = taskToStreamItem(oldTask, oldDisplayId);
@@ -207,7 +250,6 @@ export class TodoistBackend implements StreamBackend {
   async query(filters: QueryFilters): Promise<StreamItem[]> {
     const today = todayStr();
 
-    // Always fetch full active set for globally unique short IDs
     const allActive = await this.fetchAllActiveTasks();
     const allActiveIds = allActive.map((t) => t.id);
 
@@ -224,7 +266,6 @@ export class TodoistBackend implements StreamBackend {
     if (filters.status === "resolved" || filters.status === "all") {
       const resolved = await this.fetchCompletedTasks();
       tasks.push(...resolved);
-      // Include resolved IDs in the short ID pool for uniqueness
       allActiveIds.push(...resolved.map((t) => t.id));
     }
 
@@ -268,7 +309,6 @@ export class TodoistBackend implements StreamBackend {
       });
     }
 
-    // Compute short IDs against the FULL set for global uniqueness
     const shortIds = computeShortIds(allActiveIds);
 
     return tasks.map((t) =>

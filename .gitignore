@@ -5,3 +5,6 @@ build-test/
 *.tsbuildinfo
 .DS_Store
 .env
+.wrangler/
+.dev.vars
+.mcp.json

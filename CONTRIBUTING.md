@@ -26,6 +26,10 @@ claude --plugin-dir ./plugins/stream-of-consciousness
 - Update the README if you change user-facing behavior
 - Describe what you changed and why
 
+## Skill
+
+There is one skill file: `plugins/stream-of-consciousness/skills/stream/SKILL.md`. The Claude Code plugin loads it directly; the Cloudflare Worker bundles and serves it at `/skill.md` for Claude.ai connector users. Edit it in one place.
+
 ## Philosophy
 
 The stream is intentionally minimal. Before adding a feature, consider whether it adds complexity that contradicts the system's design:

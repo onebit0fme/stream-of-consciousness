@@ -1,10 +1,10 @@
 # Stream of Consciousness
 
-A Claude Code plugin for neurodivergent brains.
+A minimalist productivity system for neurodivergent brains.
 
-Core philosophy to externalize the flow without enforcing any rigid structure that adds maintenance burden. The system is the flow, which means it doesn't try to *organize* your brain. Instead, it works *with* it. The stream has no fixed state, no concept of project, to-do or done. It is moment-to-moment system with build-in mechanism to eradicate clutter. Items flow in, decay over time, and either get resolved or restreamed. Continuity by design, embraced impermanence.
+Core philosophy: externalize the flow without enforcing rigid structure. The system is the flow — it doesn't try to *organize* your brain, it works *with* it. No fixed state, no concept of project, to-do, or done. Items flow in, decay over time, and either get resolved or restreamed. Continuity by design, embraced impermanence.
 
-Designed for brains that don't do well with traditional task management systems.
+Designed for brains that don't do well with traditional task management.
 
 ## How it works
 
@@ -19,25 +19,32 @@ Everything in the stream has a **type** and a **decay period**:
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
-## Prerequisites
+## Quickstart — pick your path
 
-- [Node.js](https://nodejs.org/) 20.18.1+
-- [Claude Code](https://claude.com/download)
+| Path | Best for | Where it runs | Where your data lives | Setup |
+|---|---|---|---|---|
+| **A. Local file** | You work in Claude Code, no mobile sync needed | local stdio (Claude Code only) | a JSON file at `~/.stream-of-consciousness` | ~1 min |
+| **B. Local + Todoist** | Claude Code + you want items on your phone via Todoist's app | local stdio (Claude Code only) | your Todoist account | ~5 min |
+| **C. Remote MCP** | You want the stream in Claude.ai (web, desktop, mobile) | Cloudflare Workers (yours) | your Todoist account | ~15 min — see [docs/cloudflare-deploy.md](docs/cloudflare-deploy.md) |
 
-## Install
+**B and C share the same Todoist account, so they share the same stream.** Use both at once if you want.
 
-### As a Claude Code plugin
+---
 
-In Claude Code, run:
+## Path A — local file
+
+Install as a Claude Code plugin:
 
 ```
 /plugin marketplace add onebit0fme/stream-of-consciousness
 /plugin install stream-of-consciousness
 ```
 
-### As a standalone MCP server
+That's it. Your stream lives at `~/.stream-of-consciousness`. The plugin auto-installs the slash commands and the background skill.
 
-Add to your Claude Code MCP config (`~/.claude/settings.json`):
+## Path B — local + Todoist sync
+
+Same plugin install as Path A, then set two environment variables for your Claude Code MCP config (`~/.claude/settings.json`):
 
 ```json
 {
@@ -46,28 +53,38 @@ Add to your Claude Code MCP config (`~/.claude/settings.json`):
       "command": "npx",
       "args": ["-y", "stream-of-consciousness"],
       "env": {
-        "STREAM_BACKEND": "${STREAM_BACKEND:-file}",
-        "TODOIST_API_TOKEN": "${TODOIST_API_TOKEN}",
-        "TODOIST_PROJECT_ID": "${TODOIST_PROJECT_ID}"
+        "STREAM_BACKEND": "todoist",
+        "TODOIST_API_TOKEN": "<your-token>",
+        "TODOIST_PROJECT_ID": "<optional-project-id>"
       }
     }
   }
 }
 ```
 
+Get your token from <https://todoist.com/help/articles/find-your-api-token-Jpzx9IIlB>. Optionally scope the stream to a specific project — strongly recommended for a clean experience (see [Project scoping](#project-scoping) below). Restart Claude Code.
+
+Items now live in Todoist. They appear in Todoist's mobile and web apps. Items you add directly in Todoist are automatically picked up by the stream.
+
+## Path C — remote MCP (Claude.ai connector)
+
+Deploy your own remote MCP server to Cloudflare Workers, then add it to Claude.ai as a custom connector. Each user (you, and anyone you share it with) signs in with their own Todoist account via OAuth.
+
+This is power-user territory — see **[docs/cloudflare-deploy.md](docs/cloudflare-deploy.md)** for the full walk-through.
+
+---
+
 ## Backends
 
-The stream supports two storage backends:
-
-### File (default)
+### File (Path A)
 
 Your stream lives at `~/.stream-of-consciousness`. A single JSON file, created automatically on first use. No configuration needed.
 
-### Todoist
+### Todoist (Paths B + C)
 
-Uses the Todoist API as the full backend — items live in Todoist, visible in the mobile and web apps. Zero local state.
+Uses the Todoist API as the full backend — items live in Todoist, visible everywhere Todoist is.
 
-Set these environment variables:
+For Path B (stdio):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -75,14 +92,18 @@ Set these environment variables:
 | `TODOIST_API_TOKEN` | Yes | Your [Todoist API token](https://todoist.com/help/articles/find-your-api-token-Jpzx9IIlB) |
 | `TODOIST_PROJECT_ID` | No | Scope items to a specific project |
 
-**Project scoping:** When `TODOIST_PROJECT_ID` is set, the stream is bound to that project — all reads and writes are scoped to it. When omitted, reads pull from all projects across your account, while new items go to Inbox. Setting a project ID is recommended for a clean, predictable stream.
+For Path C, OAuth handles credentials; project selection happens via the picker page during first connect.
 
-**How it maps to Todoist:**
+#### Project scoping
+
+When a project ID is set (Path B env var, or Path C picker), the stream is bound to that project — all reads and writes are scoped to it. For Path B without a project ID, reads pull from all projects across your account, while new items go to Inbox. **Setting a project is strongly recommended for a clean, predictable stream.**
+
+#### How it maps to Todoist
 
 | Stream concept | Todoist field |
 |---------------|---------------|
 | type (task/thought/idea/output) | priority (P1/P2/P3/P4) |
-| content | content + description (auto-split at 500 chars) |
+| content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
 | start date | due date (future only) |
 | deadline | deadline |
 | item ID | short unique suffix of Todoist task ID |
@@ -93,22 +114,17 @@ Items added directly in Todoist (e.g., from mobile) are automatically picked up.
 
 ## Skills
 
-When installed as a plugin, these slash commands are available:
+Skills teach Claude how to interact with the stream — when to add, when to resolve, when to restream, how to triage, what tone to use. There are no slash commands; just describe what you want or share what's on your mind and Claude acts.
 
-| Command | What it does |
-|---------|-------------|
-| `/stream:add` | Add a task, thought, idea, or output |
-| `/stream:resolve` | Resolve an item by ID or description |
-| `/stream:restream` | Restream an item with changes |
-| `/stream:flow` | Show everything in the stream |
-| `/stream:attention` | Show what needs attention (decayed + deadline urgent) |
-| `/stream:halflife` | Early warning — items approaching their decay point |
+**Path A + B (Claude Code plugin):** the plugin auto-installs a background skill that activates whenever you discuss tasks, todos, productivity, or what's on your mind.
 
-There's also a background skill that auto-activates when you discuss tasks, todos, or productivity with Claude.
+**Path C (Claude.ai connector):** add the skill manually. Your deployed worker serves it at `https://<your-worker-domain>/skill.md` — copy that into your Claude.ai project as a skill.
 
-## MCP Tools
+Both paths use the exact same skill file (`plugins/stream-of-consciousness/skills/stream/SKILL.md`) — same philosophy, same tone, same operations, single source of truth.
 
-The server exposes 4 tools that can be used by any MCP client:
+## MCP tools
+
+The server exposes four tools — same surface on every path:
 
 | Tool | Description |
 |------|-------------|
@@ -124,33 +140,60 @@ git clone https://github.com/onebit0fme/stream-of-consciousness.git
 cd stream-of-consciousness
 npm install
 npm run build
+npm test
 ```
 
-To test with the Todoist backend locally, create a `.env` file with your token and run:
+To test the Todoist backend locally over stdio, create a `.env` file with your token and run:
 
 ```bash
 source .env && STREAM_BACKEND=todoist node build/index.js
+```
+
+To work on the Worker:
+
+```bash
+npm run worker:dev        # local dev server on :8788
+npm run worker:typecheck  # typecheck only
+npm run worker:deploy     # deploy to Cloudflare
 ```
 
 ## Project structure
 
 ```
 ├── src/
-│   ├── index.ts              — MCP server + tool handlers
-│   ├── types.ts              — Types and constants
-│   ├── utils.ts              — Date math, decay calculation, short IDs
-│   ├── backend.ts            — Backend interface + factory
-│   ├── file-backend.ts       — File storage backend
-│   └── todoist-backend.ts    — Todoist API backend
+│   ├── index.ts              — stdio MCP server entry
+│   ├── tools.ts              — tool definitions (shared by stdio + worker)
+│   ├── types.ts              — types and constants
+│   ├── utils.ts              — date math, decay, short IDs
+│   ├── backend.ts            — StreamBackend interface
+│   ├── backend-factory.ts    — env-driven backend selection (stdio only)
+│   ├── file-backend.ts       — file storage backend
+│   ├── todoist-backend.ts    — Todoist API backend (shared)
+│   └── worker/               — Cloudflare Worker (Path C)
+│       ├── index.ts          — OAuthProvider wiring (worker entry)
+│       ├── mcp-agent.ts      — StreamMCP Durable Object
+│       ├── todoist-handler.ts— Hono routes (OAuth proxy + project picker)
+│       ├── todoist-oauth.ts  — Todoist token exchange + refresh
+│       ├── todoist-api.ts    — user info fetch
+│       ├── todoist-rest.ts   — direct-fetch project list/create
+│       ├── project-picker.ts — project selection HTML
+│       ├── refreshing-backend.ts — TodoistBackend wrapper w/ token refresh
+│       ├── token-store.ts    — KV-backed Todoist credentials + pending auth
+│       ├── consent.ts        — consent dialog + CSRF/state helpers
+│       └── types.ts          — Env + Props
 ├── plugins/
 │   └── stream-of-consciousness/
 │       ├── plugin.json       — plugin manifest
 │       ├── .mcp.json         — MCP server config
-│       └── skills/           — slash commands & background skill
+│       └── skills/stream/    — background skill (Path A + B)
 ├── .claude-plugin/
 │   └── marketplace.json      — marketplace catalog
+├── docs/
+│   └── cloudflare-deploy.md  — Path C deploy walk-through
+├── wrangler.jsonc            — Cloudflare Workers deploy config
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json             — stdio build
+└── tsconfig.worker.json      — worker typecheck
 ```
 
 ## License
