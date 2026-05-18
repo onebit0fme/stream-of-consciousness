@@ -37,6 +37,7 @@ The stream is managed exclusively via MCP tools. **Always use these tools — ne
 
 ## How to Interact
 
+https://stream.quadrupley.com/callback, http://localhost:8788/callback
 ### Flow with the stream
 
 The stream is the source of truth — not your context window. Do not hold context in your head and summarize later. Instead, **flow with the stream in real time**:
