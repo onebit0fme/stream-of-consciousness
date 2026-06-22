@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.worker.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "build-worker-test",
+    "rootDir": ".",
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "src/worker/refreshing-backend.ts",
+    "src/worker/token-store.ts",
+    "test/worker-isolation.test.ts"
+  ]
+}

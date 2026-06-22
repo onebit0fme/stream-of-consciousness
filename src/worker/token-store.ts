@@ -1,10 +1,17 @@
 import type { Env } from "./types.js";
 
+/**
+ * Shared per-Todoist-user credential record. This is keyed by Todoist user id
+ * alone, so it is shared across every connection (OAuth grant) the same user
+ * authorizes. Only put values here that are genuinely the same for all of a
+ * user's connections — i.e. the access/refresh tokens. Per-connection state
+ * (such as which project a connection is scoped to) must live in the OAuth
+ * grant props instead; see `Props.streamProjectId`.
+ */
 export interface StoredTodoistCredentials {
   accessToken: string;
   refreshToken: string | null;
   expiresAt: number | null;
-  streamProjectId: string | null;
 }
 
 function key(userId: string): string {
@@ -38,7 +45,6 @@ export async function patchCredentials(
     accessToken: "",
     refreshToken: null,
     expiresAt: null,
-    streamProjectId: null,
   };
   const merged: StoredTodoistCredentials = { ...existing, ...patch };
   await writeCredentials(env, userId, merged);

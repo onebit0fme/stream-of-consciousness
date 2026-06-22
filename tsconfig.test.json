@@ -4,5 +4,6 @@
     "rootDir": ".",
     "outDir": "build-test"
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  "exclude": ["src/worker", "test/worker-isolation.test.ts"]
 }

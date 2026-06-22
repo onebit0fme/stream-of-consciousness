@@ -239,16 +239,18 @@ todoistHandler.post("/select-project", async (c) => {
     return c.text("Invalid choice", 400);
   }
 
+  // Shared per-user record holds only the tokens — they're identical across all
+  // of this user's connections. The project scope is per-connection and goes
+  // into the grant props below, so a second connection can't clobber the first.
   await writeCredentials(c.env, pending.userId, {
     accessToken: pending.accessToken,
     refreshToken: pending.refreshToken,
     expiresAt: pending.expiresAt,
-    streamProjectId,
   });
 
   const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
     metadata: { label: pending.userName },
-    props: { todoistUserId: pending.userId } satisfies Props,
+    props: { todoistUserId: pending.userId, streamProjectId } satisfies Props,
     request: pending.oauthReqInfo,
     scope: pending.oauthReqInfo.scope,
     userId: pending.userId,

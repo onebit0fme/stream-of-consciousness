@@ -20,29 +20,41 @@ function isAuthError(err: unknown): boolean {
   return false;
 }
 
+/** Builds the underlying {@link StreamBackend} from a token + project scope. Injectable for tests. */
+export type TodoistBackendFactory = (accessToken: string, projectId: string) => StreamBackend;
+
+const defaultBackendFactory: TodoistBackendFactory = (accessToken, projectId) =>
+  new TodoistBackend(accessToken, projectId, { useNativeFetch: true });
+
 export class RefreshingTodoistBackend implements StreamBackend {
-  /** Per-DO cache of TodoistBackend. Rebuilt only when the access token rotates. KV is the source of truth for creds. */
-  private cached?: TodoistBackend;
+  /** Per-DO cache of the backend. Rebuilt only when the access token rotates. KV is the source of truth for creds. */
+  private cached?: StreamBackend;
 
   private constructor(
     private env: Env,
     private userId: string,
+    /** Project scope for *this* connection, from the OAuth grant props — not the shared creds record. */
+    private streamProjectId: string,
     private creds: StoredTodoistCredentials,
+    private makeBackend: TodoistBackendFactory,
   ) {}
 
-  static async create(env: Env, userId: string): Promise<RefreshingTodoistBackend> {
+  static async create(
+    env: Env,
+    userId: string,
+    streamProjectId: string,
+    makeBackend: TodoistBackendFactory = defaultBackendFactory,
+  ): Promise<RefreshingTodoistBackend> {
     const creds = await readCredentials(env, userId);
     if (!creds) {
       throw new Error(`No Todoist credentials stored for user ${userId}`);
     }
-    return new RefreshingTodoistBackend(env, userId, creds);
+    return new RefreshingTodoistBackend(env, userId, streamProjectId, creds, makeBackend);
   }
 
-  private getBackend(): TodoistBackend {
+  private getBackend(): StreamBackend {
     if (!this.cached) {
-      this.cached = new TodoistBackend(this.creds.accessToken, this.creds.streamProjectId ?? undefined, {
-        useNativeFetch: true,
-      });
+      this.cached = this.makeBackend(this.creds.accessToken, this.streamProjectId);
     }
     return this.cached;
   }
@@ -69,7 +81,7 @@ export class RefreshingTodoistBackend implements StreamBackend {
     this.cached = undefined;
   }
 
-  private async withRetry<T>(fn: (backend: TodoistBackend) => Promise<T>): Promise<T> {
+  private async withRetry<T>(fn: (backend: StreamBackend) => Promise<T>): Promise<T> {
     if (this.isExpiring() && this.creds.refreshToken) {
       await this.refresh();
     }

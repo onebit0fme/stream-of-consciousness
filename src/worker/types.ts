@@ -11,6 +11,15 @@ export interface Env {
 
 export type Props = {
   todoistUserId: string;
+  /**
+   * The Todoist project this *connection* is scoped to. Stored in the OAuth
+   * grant props (encrypted per token), NOT in the shared per-user credential
+   * record — otherwise a second connection's project selection would clobber
+   * the first's, since both resolve to the same Todoist user. Connections
+   * authorized before this field existed will not have it; treat absence as
+   * "re-authorization required".
+   */
+  streamProjectId: string;
 };
 
 export const TODOIST_AUTHORIZE_URL = "https://app.todoist.com/oauth/authorize";

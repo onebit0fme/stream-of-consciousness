@@ -2,6 +2,7 @@
 node_modules/
 build/
 build-test/
+build-worker-test/
 *.tsbuildinfo
 .DS_Store
 .env
