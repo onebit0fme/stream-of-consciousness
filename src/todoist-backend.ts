@@ -71,6 +71,15 @@ export function mergeContent(content: string, description?: string | null): stri
   return content + "\n\n" + description;
 }
 
+/**
+ * Todoist "uncompletable" tasks have a name prefixed with "* " (asterisk + space).
+ * They render as headers/notes with no checkbox and aren't real stream items, so
+ * we hide them from clients entirely.
+ */
+function isUncompletable(task: Task): boolean {
+  return task.content.startsWith("* ");
+}
+
 function taskToStreamItem(task: Task, displayId: string): StreamItem {
   const type = PRIORITY_TO_TYPE[task.priority] ?? "task";
   // Use due.date as startDate (stream semantics), fall back to addedAt date
@@ -335,9 +344,12 @@ export class TodoistBackend implements StreamBackend {
       cursor = response.nextCursor;
     } while (cursor);
 
+    // Hide "uncompletable" header/note tasks ("* ...") from the stream entirely.
+    const tasks = allTasks.filter((t) => !isUncompletable(t));
+
     // Auto-clear due dates on tasks that have entered the stream (due <= today)
     const today = todayStr();
-    const stale = allTasks.filter((t) => t.due && t.due.date <= today);
+    const stale = tasks.filter((t) => t.due && t.due.date <= today);
     await Promise.all(
       stale.map((t) =>
         this.api.updateTask(t.id, { dueString: null }).then(() => {
@@ -346,7 +358,7 @@ export class TodoistBackend implements StreamBackend {
       ),
     );
 
-    return allTasks;
+    return tasks;
   }
 
   /**
@@ -374,7 +386,8 @@ export class TodoistBackend implements StreamBackend {
         cursor = response.nextCursor;
       } while (cursor);
 
-      return allTasks;
+      // Hide "uncompletable" header/note tasks ("* ...") from the stream entirely.
+      return allTasks.filter((t) => !isUncompletable(t));
     } catch {
       // Completed tasks API may not be available on all plans
       return [];
@@ -407,7 +420,7 @@ export class TodoistBackend implements StreamBackend {
     // Try direct API fetch (for IDs not in active set, e.g. completed)
     try {
       const task = await this.api.getTask(input);
-      if (task) return { task, shortIds, allIds };
+      if (task && !isUncompletable(task)) return { task, shortIds, allIds };
     } catch {
       // Not found
     }
