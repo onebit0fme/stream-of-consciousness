@@ -8,14 +8,14 @@ Designed for brains that don't do well with traditional task management.
 
 ## How it works
 
-Everything in the stream has a **type** and a **decay period**:
+Everything in the stream has a **type** and a **decay period**. Type is a *motion-state* — it classifies how an item moves through attention (its lifecycle), not what it's about. Two are perches you can stand on; two are flights (movement *toward* something):
 
-| Type | Decay | What it is |
-|------|-------|------------|
-| task | 10 days | Something to do |
-| thought | 7 days | A fleeting observation or concern |
-| idea | 14 days | Something to explore or develop |
-| output | 21 days | Something to produce or deliver |
+| Type | Flag | In a word | Decay | What it is |
+|------|------|-----------|-------|------------|
+| live | P1 | doing | 7 days | A foot is already down — being done. *Would I act on it today?* |
+| pull | P2 | wanting | 4 days | Momentum toward it, no foot down — you keep circling it. Shortest by design: resolve or reveal, fast. |
+| gate | P3 | deciding | 14 days | The work *is* an unmade decision. Longest: decisions need to ripen. |
+| drift | P4 | wondering | 5 days | Free exploration, no obligation. Fading is the feature — what matters resurfaces on its own. |
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
@@ -102,7 +102,7 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 
 | Stream concept | Todoist field |
 |---------------|---------------|
-| type (task/thought/idea/output) | priority (P1/P2/P3/P4) |
+| type / motion-state (live/pull/gate/drift) | priority (P1/P2/P3/P4) |
 | content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
 | start date | due date (future only) |
 | deadline | deadline |

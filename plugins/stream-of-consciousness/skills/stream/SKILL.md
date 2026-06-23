@@ -26,14 +26,18 @@ The user has the Stream of Consciousness MCP server installed. It exposes a pers
 
 Always use these tools — never reason about the state of the stream from memory.
 
-## Item types and decay periods
+## Motion-states (the four types) and decay periods
 
-| Type | Decay | Description |
-|------|-------|-------------|
-| `task` | 10 days | Something to do |
-| `thought` | 7 days | A fleeting observation or concern |
-| `idea` | 14 days | Something to explore or develop |
-| `output` | 21 days | Something to produce or deliver |
+Type doesn't classify what an item is *about* — it classifies how the item **moves through attention**. There are four motion-states. Two are perches you can stand on; two are flights (movement *toward* something). Each maps to a Todoist priority flag and has its own decay window.
+
+| Type | Flag | In a word | Decay | What it is / defining test |
+|------|------|-----------|-------|----------------------------|
+| `live` | P1 | doing | 7 days | A foot is already down — in-hand, being done. *"Would I act on it today?"* It's engagement, not intention. |
+| `pull` | P2 | wanting | 4 days | Felt momentum *toward* it, but no foot down — you keep circling it. *"I keep thinking about it but haven't started."* Shortest window by design: a pull should resolve or reveal fast. |
+| `gate` | P3 | deciding | 14 days | The work *is* a decision, and it isn't made. *"I can state it but not the next action — because the next action is the choice."* Longest window: decisions need to ripen. |
+| `drift` | P4 | wondering | 5 days | Free exploration, no obligation — novelty for its own sake (seeds, what-ifs, interesting links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
+
+When unsure, default to `live`. If an item keeps coming back unstarted, it's probably a `pull`; if what's blocking it is a choice rather than the doing, it's a `gate`.
 
 ## How to interact
 
@@ -58,8 +62,8 @@ Do not batch. Do not defer. Do not maintain your own tracking tables or summarie
 - **Restream by default** when anything about an item that's still in flight changes:
   - The user shares a progress update or new context about an existing item.
   - An item's scope, framing, or understanding has changed through conversation.
-  - A thought has crystallized into a task or idea.
-  - An item's type should change (e.g., an idea becomes a task, a task becomes an output that still needs delivery).
+  - A pull has crystallized into something you're now actually doing (pull → live).
+  - An item's motion-state should change (e.g., a gate whose decision is now made becomes a live; a pull you keep circling becomes a gate once you see the block is a choice).
   - New details, links, or references are mentioned that belong on an existing item.
 - **Add by default** when the user mentions something new. Don't ask "want me to add this?" — just add it.
 
@@ -83,14 +87,14 @@ The first line is what you'd put on a sticky note — short, scannable, says wha
 
 Use this format when it's genuinely useful — don't pad short items with empty detail sections, and don't bury the summary inside a long paragraph. Single-line content is fine for items that fit on one line.
 
-This applies to all four item types — tasks, thoughts, ideas, and outputs alike.
+This applies to all four motion-states — live, pull, gate, and drift alike.
 
 ## Common operations
 
 ### Adding an item
 
 1. Parse the user's input for:
-   - **type** — `task`, `thought`, `idea`, or `output` (default to `task` if not clear).
+   - **type** — the motion-state: `live`, `pull`, `gate`, or `drift` (default to `live` if not clear). Classify by how it moves, not what it's about: being done → `live`; circled but unstarted → `pull`; blocked on a decision → `gate`; idle wondering → `drift`.
    - **content** — what the item is. Follow the "Writing content" guidance above — use summary + details when there's enough substance to warrant it.
    - **startDate** — `YYYY-MM-DD`, defaults to today unless they specify a future start.
    - **deadline** — `YYYY-MM-DD` only if there's a hard external deadline.
@@ -98,13 +102,13 @@ This applies to all four item types — tasks, thoughts, ideas, and outputs alik
 3. Call `stream_add`.
 4. Confirm what was added in a brief, conversational way.
 
-Example parsings:
-- "task: review the Q1 budget proposal, deadline March 5" → type=task, content="Review the Q1 budget proposal", deadline=2026-03-05
-- "idea: build a CLI tool for stream management" → type=idea, content="Build a CLI tool for stream management"
-- "thought: maybe we should rethink the auth flow" → type=thought, content="Maybe we should rethink the auth flow"
-- "finish the API docs by Friday" → type=task, content="Finish the API docs", deadline=(next Friday)
-- "output: quarterly report covering the new growth metric and Q1 hiring plan" → type=output, content="Quarterly report\n\nCovers the new growth metric (the one we discussed last week) and the Q1 hiring plan."
-- "idea: a CLI for the stream so I can add things without opening Claude. Probably Rust. Could lift the existing TypeScript types via JSON schema." → type=idea, content="CLI for the stream so I can add items without opening Claude\n\nProbably Rust. Could lift the existing TypeScript types via JSON schema."
+Example parsings (note how type follows the *motion*, not the subject):
+- "review the Q1 budget proposal, deadline March 5" → type=live, content="Review the Q1 budget proposal", deadline=2026-03-05 (a concrete thing to do)
+- "I keep meaning to build a CLI tool for the stream" → type=pull, content="Build a CLI tool for stream management" (momentum toward, not started)
+- "should we switch insurers or not?" → type=gate, content="Decide whether to switch insurers" (the work is the decision)
+- "finish the API docs by Friday" → type=live, content="Finish the API docs", deadline=(next Friday)
+- "random thought: what if the stream had a heat-based decay someday" → type=drift, content="What if the stream had heat-based decay" (idle wondering, no obligation)
+- "a CLI for the stream so I can add things without opening Claude. Probably Rust. Could lift the existing TypeScript types via JSON schema." → type=pull, content="CLI for the stream so I can add items without opening Claude\n\nProbably Rust. Could lift the existing TypeScript types via JSON schema."
 
 ### Resolving an item
 
@@ -128,12 +132,12 @@ Example parsings:
 
 Pick the view that matches the user's question:
 
-- **Full picture** — `stream_query` with no filters. Group by type (tasks, thoughts, ideas, outputs). For each item show content, ID, and decay progress (e.g., "day 3 of 10"). If deadlines exist, show days remaining. If the stream is empty, say so warmly.
+- **Full picture** — `stream_query` with no filters. Group by motion-state (live, pull, gate, drift). For each item show content, ID, and decay progress (e.g., "day 3 of 7"). If deadlines exist, show days remaining. If the stream is empty, say so warmly.
 - **Attention** (decayed and deadline-urgent) — call `stream_query` twice:
   - With `decay_min: 1.0` → items past their natural lifetime.
   - With `deadline_within: 2` → items with deadlines within 2 days.
   Present in two sections. Items may appear in both; don't deduplicate. If both queries return nothing, the stream is calm — say so.
-- **Half-life** (early warning) — `stream_query` with `decay_min: 0.5, decay_max: 1.0`. Items between 50% and 100% of their decay period. Gentle tone — a heads-up, not an alarm. For each item, show how far through its lifecycle ("day 6 of 10") and remaining time on any deadline.
+- **Half-life** (early warning) — `stream_query` with `decay_min: 0.5, decay_max: 1.0`. Items between 50% and 100% of their decay period. Gentle tone — a heads-up, not an alarm. For each item, show how far through its lifecycle ("day 5 of 7") and remaining time on any deadline.
 
 ## Tone
 

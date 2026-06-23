@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { StreamBackend } from "./backend.js";
 import { todayStr, daysBetween, decayDays, decayProgress } from "./utils.js";
+import { ITEM_TYPES } from "./types.js";
 
 export function registerTools(server: McpServer, backend: StreamBackend): void {
   server.tool(
@@ -10,9 +11,16 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
     {
       content: z.string().describe("What to add to the stream"),
       type: z
-        .enum(["task", "thought", "idea", "output"])
-        .default("task")
-        .describe("Item type (default: task)"),
+        .enum(ITEM_TYPES)
+        .default("live")
+        .describe(
+          "Motion-state — how the item moves through attention: " +
+            "live=doing, a foot is already down (would I act on it today?); " +
+            "pull=wanting, you keep circling it with no foot down; " +
+            "gate=deciding, the next action is itself an unmade decision; " +
+            "drift=wondering, free exploration with no obligation (fading is fine). " +
+            "Default: live."
+        ),
       startDate: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -88,9 +96,9 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .optional()
         .describe("Substring search on content (case-insensitive)"),
       type: z
-        .array(z.enum(["task", "thought", "idea", "output"]))
+        .array(z.enum(ITEM_TYPES))
         .optional()
-        .describe("Filter by item type(s)"),
+        .describe("Filter by motion-state(s): live, pull, gate, drift"),
       status: z
         .enum(["active", "resolved", "all"])
         .default("active")
@@ -179,9 +187,9 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .optional()
         .describe("New content (defaults to old item's content)"),
       type: z
-        .enum(["task", "thought", "idea", "output"])
+        .enum(ITEM_TYPES)
         .optional()
-        .describe("New type (defaults to old item's type)"),
+        .describe("New motion-state (defaults to old item's state)"),
       startDate: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)

@@ -1,13 +1,22 @@
 // --- Constants ---
 
+// Motion-states: type classifies how an item moves through attention (its
+// lifecycle behavior), not what it is about. The decay window is part of each
+// state's mechanical definition.
+//   live  — doing (a perch you're standing on)
+//   pull  — wanting (a flight; momentum toward, no foot down) — shortest, by design
+//   gate  — deciding (a flight; the work is an unmade decision) — longest, decisions ripen
+//   drift — wondering (a flight; novelty for its own sake) — fast, fading is the feature
 export const DECAY: Record<string, number> = {
-  task: 10,
-  thought: 7,
-  idea: 14,
-  output: 21,
+  live: 7,
+  pull: 4,
+  gate: 14,
+  drift: 5,
 };
 
-export const ITEM_TYPES = ["task", "thought", "idea", "output"] as const;
+// Ordered highest→lowest priority (P1→P4). This order is load-bearing: the
+// Todoist priority mapping derives from it (priority = ITEM_TYPES.length - index).
+export const ITEM_TYPES = ["live", "pull", "gate", "drift"] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
 // --- Data Types ---

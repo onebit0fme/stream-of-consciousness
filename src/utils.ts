@@ -13,7 +13,7 @@ export function daysBetween(a: string, b: string): number {
 }
 
 export function decayDays(type: string): number {
-  return DECAY[type] ?? 10;
+  return DECAY[type] ?? 7;
 }
 
 export function decayProgress(item: { startDate: string; type: string }, today: string): number {

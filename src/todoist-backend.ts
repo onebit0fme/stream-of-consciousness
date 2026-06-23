@@ -1,7 +1,7 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
 import type { Task } from "@doist/todoist-api-typescript";
 import { StreamBackend } from "./backend.js";
-import { ItemType, StreamItem, QueryFilters } from "./types.js";
+import { ITEM_TYPES, ItemType, StreamItem, QueryFilters } from "./types.js";
 import {
   todayStr,
   daysBetween,
@@ -11,22 +11,16 @@ import {
 } from "./utils.js";
 
 // --- Priority Mapping ---
-// Todoist API: priority 4 = P1/urgent/red, 1 = P4/normal
-// Stream: task=P1, thought=P2, idea=P3, output=P4
+// Todoist API: priority 4 = P1/urgent/red, 1 = P4/normal.
+// Derived from ITEM_TYPES' P1→P4 order so a rename/reorder has a single source
+// of truth: live=P1(4), pull=P2(3), gate=P3(2), drift=P4(1).
+const TYPE_TO_PRIORITY = Object.fromEntries(
+  ITEM_TYPES.map((t, i) => [t, ITEM_TYPES.length - i]),
+) as Record<ItemType, number>;
 
-const TYPE_TO_PRIORITY: Record<ItemType, number> = {
-  task: 4,
-  thought: 3,
-  idea: 2,
-  output: 1,
-};
-
-const PRIORITY_TO_TYPE: Record<number, ItemType> = {
-  4: "task",
-  3: "thought",
-  2: "idea",
-  1: "output",
-};
+const PRIORITY_TO_TYPE = Object.fromEntries(
+  ITEM_TYPES.map((t, i) => [ITEM_TYPES.length - i, t]),
+) as Record<number, ItemType>;
 
 // --- Content split/merge for Todoist's 500-char title limit ---
 // Sentinel "→" signals that the title was truncated and description holds the full text.
@@ -81,7 +75,7 @@ function isUncompletable(task: Task): boolean {
 }
 
 function taskToStreamItem(task: Task, displayId: string): StreamItem {
-  const type = PRIORITY_TO_TYPE[task.priority] ?? "task";
+  const type = PRIORITY_TO_TYPE[task.priority] ?? "live";
   // Use due.date as startDate (stream semantics), fall back to addedAt date
   const startDate =
     task.due?.date ?? (task.addedAt ? task.addedAt.slice(0, 10) : todayStr());
@@ -206,7 +200,7 @@ export class TodoistBackend implements StreamBackend {
     const { task: oldTask, allIds } = await this.findTaskWithContext(strId);
     if (!oldTask) return null;
 
-    const oldType = PRIORITY_TO_TYPE[oldTask.priority] ?? "task";
+    const oldType = PRIORITY_TO_TYPE[oldTask.priority] ?? "live";
     const today = todayStr();
 
     // Close old task

@@ -32,47 +32,50 @@ describe("daysBetween", () => {
 });
 
 describe("decayDays", () => {
-  it("returns 10 for task", () => {
-    assert.equal(decayDays("task"), 10);
+  it("returns 7 for live", () => {
+    assert.equal(decayDays("live"), 7);
   });
 
-  it("returns 7 for thought", () => {
-    assert.equal(decayDays("thought"), 7);
+  it("returns 4 for pull", () => {
+    assert.equal(decayDays("pull"), 4);
   });
 
-  it("returns 14 for idea", () => {
-    assert.equal(decayDays("idea"), 14);
+  it("returns 14 for gate", () => {
+    assert.equal(decayDays("gate"), 14);
   });
 
-  it("returns 21 for output", () => {
-    assert.equal(decayDays("output"), 21);
+  it("returns 5 for drift", () => {
+    assert.equal(decayDays("drift"), 5);
   });
 
-  it("defaults to 10 for unknown type", () => {
-    assert.equal(decayDays("unknown"), 10);
+  it("defaults to 7 for unknown type", () => {
+    assert.equal(decayDays("unknown"), 7);
   });
 });
 
 describe("decayProgress", () => {
   it("returns 0 on start date", () => {
-    assert.equal(decayProgress({ startDate: "2025-01-10", type: "task" }, "2025-01-10"), 0);
+    assert.equal(decayProgress({ startDate: "2025-01-10", type: "live" }, "2025-01-10"), 0);
   });
 
   it("returns 0.5 at half decay", () => {
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "task" }, "2025-01-06"), 0.5);
+    // gate decays in 14 days, so 7 days = 0.5
+    assert.equal(decayProgress({ startDate: "2025-01-01", type: "gate" }, "2025-01-08"), 0.5);
   });
 
   it("returns 1.0 at full decay", () => {
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "task" }, "2025-01-11"), 1.0);
+    // live decays in 7 days
+    assert.equal(decayProgress({ startDate: "2025-01-01", type: "live" }, "2025-01-08"), 1.0);
   });
 
   it("exceeds 1.0 past decay", () => {
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "task" }, "2025-01-21"), 2.0);
+    // live decays in 7 days, so 14 days = 2.0
+    assert.equal(decayProgress({ startDate: "2025-01-01", type: "live" }, "2025-01-15"), 2.0);
   });
 
   it("uses type-specific decay period", () => {
-    // thought decays in 7 days, so 7 days = 1.0
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "thought" }, "2025-01-08"), 1.0);
+    // pull decays in 4 days, so 4 days = 1.0
+    assert.equal(decayProgress({ startDate: "2025-01-01", type: "pull" }, "2025-01-05"), 1.0);
   });
 });
 
