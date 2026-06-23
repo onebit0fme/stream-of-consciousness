@@ -19,6 +19,16 @@ export const DECAY: Record<string, number> = {
 export const ITEM_TYPES = ["live", "pull", "gate", "drift"] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
+// Recurrence: how many times a flight has appeared (1 = first life). A restream
+// of an item that had already decayed increments it; once it reaches this count
+// the item auto-routes to `gate` — the system stops presenting a ghost as a
+// perch ("do this") and starts presenting it as a decision.
+export const AUTO_GATE_RECURRENCE = 3;
+
+// Recurrence is surfaced (Todoist label + rendered count) only from this count
+// up — the first life stays unmarked, so a fresh item looks fresh.
+export const RECURRENCE_DISPLAY_THRESHOLD = 2;
+
 // --- Data Types ---
 
 export interface StreamItem {
@@ -30,6 +40,8 @@ export interface StreamItem {
   deadline: string | null;
   resolvedAt: string | null;
   createdAt: string;
+  /** Appearance count: 1 = first life, ≥2 = restreamed from a decayed copy. */
+  recurrence: number;
   restreamedFrom?: number | string | null;
 }
 
@@ -48,6 +60,8 @@ export interface FileStreamItem {
   deadline: string | null;
   resolvedAt: string | null;
   createdAt: string;
+  /** Appearance count (optional on disk for legacy items; treated as 1 when absent). */
+  recurrence?: number;
   restreamedFrom?: number | null;
 }
 

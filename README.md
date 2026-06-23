@@ -106,11 +106,12 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 | content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
 | start date | due date (future only) |
 | deadline | deadline |
+| recurrence count | label `↻N` (N≥2, system-managed) |
 | item ID | short unique suffix of Todoist task ID |
 
 **Date handling:** Items with a future start date get a Todoist due date so they stay out of the stream until that date arrives. Items entering the stream today (or with a past start date) have no due date set — this avoids cluttering Todoist with "overdue" markers. Any existing due dates that have reached today are automatically cleared when the stream is read.
 
-Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original.
+Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original; restreaming an item that had already decayed also bumps its recurrence count (`↻N`), and once it reaches `↻3` the item auto-routes to `gate` — the system stops treating a recurring ghost as something to *do* and starts treating it as something to *decide*.
 
 ## Skills
 

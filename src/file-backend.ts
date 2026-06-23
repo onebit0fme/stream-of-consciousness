@@ -16,6 +16,8 @@ import {
   decayProgress,
   getActiveFileItems,
   nowIso,
+  nextRecurrence,
+  restreamType,
 } from "./utils.js";
 
 const STREAM_PATH = path.join(os.homedir(), ".stream-of-consciousness");
@@ -44,6 +46,7 @@ function toStreamItem(item: FileStreamItem): StreamItem {
   return {
     ...item,
     displayId: `#${item.id}`,
+    recurrence: item.recurrence ?? 1,
     restreamedFrom: item.restreamedFrom ?? null,
   };
 }
@@ -65,6 +68,7 @@ export class FileBackend implements StreamBackend {
       deadline: params.deadline,
       resolvedAt: null,
       createdAt: nowIso(),
+      recurrence: 1,
     };
     data.items.push(newItem);
     data.nextId++;
@@ -108,15 +112,23 @@ export class FileBackend implements StreamBackend {
     const today = todayStr();
     oldItem.resolvedAt = nowIso();
 
+    // Recurrence climbs only if the old copy had already decayed (a returning ghost);
+    // a sufficiently-recurred ghost auto-routes to `gate`.
+    const recurrence = nextRecurrence(
+      oldItem.recurrence ?? 1,
+      decayProgress(oldItem, today),
+    );
+
     const newItem: FileStreamItem = {
       id: data.nextId,
-      type: changes.type ?? oldItem.type,
+      type: restreamType(changes.type, oldItem.type, recurrence),
       content: changes.content ?? oldItem.content,
       startDate: changes.startDate ?? today,
       deadline:
         changes.deadline !== undefined ? changes.deadline : oldItem.deadline,
       resolvedAt: null,
       createdAt: nowIso(),
+      recurrence,
       restreamedFrom: numId,
     };
     data.items.push(newItem);

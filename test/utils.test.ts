@@ -7,6 +7,8 @@ import {
   decayProgress,
   computeShortIds,
   resolveShortId,
+  nextRecurrence,
+  restreamType,
 } from "../src/utils.js";
 
 describe("daysBetween", () => {
@@ -76,6 +78,34 @@ describe("decayProgress", () => {
   it("uses type-specific decay period", () => {
     // pull decays in 4 days, so 4 days = 1.0
     assert.equal(decayProgress({ startDate: "2025-01-01", type: "pull" }, "2025-01-05"), 1.0);
+  });
+});
+
+describe("nextRecurrence", () => {
+  it("increments when the old copy had decayed (progress >= 1)", () => {
+    assert.equal(nextRecurrence(1, 1.0), 2);
+    assert.equal(nextRecurrence(2, 1.5), 3);
+  });
+
+  it("carries the count forward when the old copy was still fresh", () => {
+    assert.equal(nextRecurrence(1, 0.4), 1);
+    assert.equal(nextRecurrence(3, 0.99), 3);
+  });
+});
+
+describe("restreamType", () => {
+  it("honors an explicit type over everything", () => {
+    assert.equal(restreamType("drift", "live", 5), "drift");
+  });
+
+  it("auto-routes to gate at recurrence >= 3", () => {
+    assert.equal(restreamType(undefined, "live", 3), "gate");
+    assert.equal(restreamType(undefined, "pull", 4), "gate");
+  });
+
+  it("keeps the old type below the threshold", () => {
+    assert.equal(restreamType(undefined, "pull", 2), "pull");
+    assert.equal(restreamType(undefined, "live", 1), "live");
   });
 });
 

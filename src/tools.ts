@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { StreamBackend } from "./backend.js";
-import { todayStr, daysBetween, decayDays, decayProgress } from "./utils.js";
+import { todayStr, daysBetween, decayDays, decayProgress, formatRecurrence } from "./utils.js";
 import { ITEM_TYPES } from "./types.js";
 
 export function registerTools(server: McpServer, backend: StreamBackend): void {
@@ -150,7 +150,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         const progress = decayProgress(item, today);
         const pct = Math.round(progress * 100);
 
-        let line = `[${item.displayId}] "${item.content}" (${item.type}) — age: ${age}d, decay: ${age}/${decay} (${pct}%)`;
+        let line = `[${item.displayId}] "${item.content}" (${item.type}${formatRecurrence(item.recurrence)}) — age: ${age}d, decay: ${age}/${decay} (${pct}%)`;
 
         if (item.deadline) {
           const daysLeft = daysBetween(today, item.deadline);
@@ -220,13 +220,11 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         };
       }
 
+      let text = `Restreamed ${result.old.displayId} -> ${result.new.displayId}: "${result.new.content}"${formatRecurrence(result.new.recurrence)}`;
+      if (result.new.type !== result.old.type) text += `, now ${result.new.type}`;
+
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Restreamed ${result.old.displayId} -> ${result.new.displayId}: "${result.new.content}"`,
-          },
-        ],
+        content: [{ type: "text" as const, text }],
       };
     }
   );

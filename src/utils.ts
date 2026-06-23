@@ -1,4 +1,11 @@
-import { DECAY, StreamItem, FileStreamItem } from "./types.js";
+import {
+  DECAY,
+  AUTO_GATE_RECURRENCE,
+  RECURRENCE_DISPLAY_THRESHOLD,
+  ItemType,
+  StreamItem,
+  FileStreamItem,
+} from "./types.js";
 
 export function todayStr(): string {
   const d = new Date();
@@ -19,6 +26,37 @@ export function decayDays(type: string): number {
 export function decayProgress(item: { startDate: string; type: string }, today: string): number {
   const age = daysBetween(item.startDate, today);
   return age / decayDays(item.type);
+}
+
+/**
+ * Recurrence count for the new copy when restreaming. It climbs only when the
+ * old copy had actually decayed (a returning ghost), not on a mid-life
+ * refinement — so chatty restreams don't inflate the count.
+ */
+export function nextRecurrence(oldRecurrence: number, oldProgress: number): number {
+  return oldProgress >= 1 ? oldRecurrence + 1 : oldRecurrence;
+}
+
+/**
+ * The type a restreamed item should take: the caller's explicit type wins;
+ * otherwise a sufficiently-recurred ghost auto-routes to `gate`, else it keeps
+ * the old type.
+ */
+export function restreamType(
+  explicit: ItemType | undefined,
+  oldType: ItemType,
+  recurrence: number,
+): ItemType {
+  if (explicit) return explicit;
+  return recurrence >= AUTO_GATE_RECURRENCE ? "gate" : oldType;
+}
+
+/**
+ * Display suffix for an item's recurrence: ` ↻N` once it has recurred, empty
+ * for a first-life item. The leading space lets callers append it inline.
+ */
+export function formatRecurrence(recurrence: number): string {
+  return recurrence >= RECURRENCE_DISPLAY_THRESHOLD ? ` ↻${recurrence}` : "";
 }
 
 export function getActiveFileItems(items: FileStreamItem[], today: string): FileStreamItem[] {

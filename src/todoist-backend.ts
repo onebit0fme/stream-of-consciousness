@@ -1,13 +1,21 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
 import type { Task } from "@doist/todoist-api-typescript";
 import { StreamBackend } from "./backend.js";
-import { ITEM_TYPES, ItemType, StreamItem, QueryFilters } from "./types.js";
+import {
+  ITEM_TYPES,
+  ItemType,
+  StreamItem,
+  QueryFilters,
+  RECURRENCE_DISPLAY_THRESHOLD,
+} from "./types.js";
 import {
   todayStr,
   daysBetween,
   decayProgress,
   computeShortIds,
   resolveShortId,
+  nextRecurrence,
+  restreamType,
 } from "./utils.js";
 
 // --- Priority Mapping ---
@@ -21,6 +29,25 @@ const TYPE_TO_PRIORITY = Object.fromEntries(
 const PRIORITY_TO_TYPE = Object.fromEntries(
   ITEM_TYPES.map((t, i) => [ITEM_TYPES.length - i, t]),
 ) as Record<number, ItemType>;
+
+// --- Recurrence label ---
+// One system-managed Todoist label `↻N` (N ≥ 2) carries the recurrence count.
+// It's written automatically on restream and never shown in stream content.
+const RECURRENCE_LABEL_RE = /^↻(\d+)$/;
+
+function parseRecurrence(labels: string[] | undefined): number {
+  for (const label of labels ?? []) {
+    const match = RECURRENCE_LABEL_RE.exec(label);
+    if (match) return parseInt(match[1], 10);
+  }
+  return 1;
+}
+
+/** Replace any existing recurrence label, preserving the task's other labels. */
+function withRecurrenceLabel(labels: string[] | undefined, recurrence: number): string[] {
+  const others = (labels ?? []).filter((l) => !RECURRENCE_LABEL_RE.test(l));
+  return recurrence >= RECURRENCE_DISPLAY_THRESHOLD ? [...others, `↻${recurrence}`] : others;
+}
 
 // --- Content split/merge for Todoist's 500-char title limit ---
 // Sentinel "→" signals that the title was truncated and description holds the full text.
@@ -89,6 +116,7 @@ function taskToStreamItem(task: Task, displayId: string): StreamItem {
     deadline: task.deadline?.date ?? null,
     resolvedAt: task.completedAt ?? null,
     createdAt: task.addedAt ?? new Date().toISOString(),
+    recurrence: parseRecurrence(task.labels),
   };
 }
 
@@ -203,11 +231,20 @@ export class TodoistBackend implements StreamBackend {
     const oldType = PRIORITY_TO_TYPE[oldTask.priority] ?? "live";
     const today = todayStr();
 
+    // Recurrence climbs only if the old copy had already decayed (a returning ghost);
+    // a sufficiently-recurred ghost auto-routes to `gate`. Display ID is filled in
+    // once it's computed against the old+new union below.
+    const oldItem = taskToStreamItem(oldTask, "");
+    const recurrence = nextRecurrence(
+      oldItem.recurrence,
+      decayProgress(oldItem, today),
+    );
+
     // Close old task
     await this.api.closeTask(oldTask.id);
 
     // Create new task
-    const newType = changes.type ?? oldType;
+    const newType = restreamType(changes.type, oldType, recurrence);
     const newContent = changes.content ?? oldTask.content;
     const newStartDate = changes.startDate ?? today;
     const newDeadline =
@@ -216,11 +253,13 @@ export class TodoistBackend implements StreamBackend {
         : oldTask.deadline?.date ?? null;
 
     const isFuture = newStartDate > today;
+    const newLabels = withRecurrenceLabel(oldTask.labels, recurrence);
     const { content: splitTitle, description: splitDesc } = splitContent(newContent);
     const newTask = await this.api.addTask({
       content: splitTitle,
       ...(splitDesc ? { description: splitDesc } : {}),
       priority: TYPE_TO_PRIORITY[newType],
+      ...(newLabels.length ? { labels: newLabels } : {}),
       ...(isFuture ? { dueDate: newStartDate } : {}),
       ...(newDeadline ? { deadlineDate: newDeadline } : {}),
       ...(this.projectId ? { projectId: this.projectId } : {}),
@@ -241,11 +280,13 @@ export class TodoistBackend implements StreamBackend {
     const oldDisplayId = shortIds.get(oldTask.id) ?? oldTask.id.slice(-4);
     const newDisplayId = shortIds.get(newTask.id) ?? newTask.id.slice(-4);
 
-    const oldItem = taskToStreamItem(oldTask, oldDisplayId);
+    oldItem.displayId = oldDisplayId;
     oldItem.resolvedAt = new Date().toISOString();
 
     const newItem = taskToStreamItem(newTask, newDisplayId);
     newItem.restreamedFrom = oldTask.id;
+    // Set explicitly: the create response may not echo the label we just wrote.
+    newItem.recurrence = recurrence;
 
     return { old: oldItem, new: newItem };
   }
