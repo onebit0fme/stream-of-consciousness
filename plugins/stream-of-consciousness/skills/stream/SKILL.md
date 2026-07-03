@@ -12,7 +12,7 @@ The user has the Stream of Consciousness MCP server installed. It exposes a pers
 
 - Things don't get "done" — they either **leave the stream** (resolved) or get **restreamed** (redefined).
 - **Decay** forces regular triage without guilt. Items naturally fade unless actively kept.
-- No manual tags or categories — just type, content, and time, plus one system-managed recurrence count (see below).
+- No manual tags or categories — just type, content, and time.
 - The system is intentionally minimal. Do not add complexity.
 
 ## MCP tools available
@@ -38,21 +38,6 @@ Type doesn't classify what an item is *about* — it classifies what your attent
 | `drift` | P4 | wondering | 5 days | **Free flight** — interesting, but ask "so what would you *do*?" and you'd shrug. Novelty for its own sake (seeds, what-ifs, saved links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
 
 Two questions sort anything: **(1) Is there a concrete action?** No → `drift` or `muse`. Yes → `live` or `pull`. Then **(2)** if no action, new-and-sparkly = `drift` / something you keep returning to = `muse`; if action, in motion = `live` / circling it = `pull`. When unsure, default to `live`.
-
-## Recurrence — when something keeps coming back
-
-Items decay and fade. When a faded thing comes back, **restream the existing item — don't add a new one.** Restreaming a decayed item bumps a recurrence count (carried as the Todoist label `↻N`, N≥2); a fresh `stream_add` starts over at 1 and the signal is lost. So before adding, if the input matches something already in the stream — especially a decayed one — restream *that* instead.
-
-The repeating item isn't a failure; it's the loudest, most informative signal in the stream. It means the block was never the doing.
-
-- **Reframe on resurface — never repeat verbatim.** The system surfaces the count but never reclassifies the item for you — that's your job. Reword by how many times it's come back:
-  - 1st: the thing itself.
-  - ~3rd (↻3): "what decision is actually under this?" — name the real block (decide, delegate, or drop).
-  - ~5th (↻5): "is this still a yes? saying no is a clean resolve."
-- **Dropping is a first-class win.** Deciding *not* to do something and resolving it is a clean leave, not a failure — especially for a high-recurrence ghost. Offer it openly.
-- **Watch for pull → muse.** A `pull` you keep circling but never act on may really be a `muse` — something you return to sit with, not something to do. If the action never lands, consider restreaming it to `muse` instead of pushing it.
-
-Surface the count when you show these items ("you've circled this 3×").
 
 ## How to interact
 
@@ -141,13 +126,13 @@ Example parsings (note how type follows the *motion*, not the subject):
    - If it's text, `stream_query` to find matches; same disambiguation rules as resolve.
 2. Determine what changed: new content, new type, new deadline, new startDate. If the user didn't say what changed, ask.
 3. Call `stream_restream` with the ID and only the changed fields. Unspecified fields carry over from the original.
-4. Confirm conversationally: old ID → new ID, what changed. If the tool reports a recurrence bump (↻N), surface it and reframe (see Recurrence above) — don't just re-state the task; name the decision under it or offer the drop.
+4. Confirm conversationally: old ID → new ID, what changed.
 
 ### Showing the stream
 
 Pick the view that matches the user's question:
 
-- **Full picture** — `stream_query` with no filters. Group by motion-state (live, pull, muse, drift). For each item show content, ID, and decay progress (e.g., "day 3 of 7"). If deadlines exist, show days remaining. Call out anything recurring (↻N) — "circled 3×" — it's the most informative thing in the stream. If the stream is empty, say so warmly.
+- **Full picture** — `stream_query` with no filters. Group by motion-state (live, pull, muse, drift). For each item show content, ID, and decay progress (e.g., "day 3 of 7"). If deadlines exist, show days remaining. If the stream is empty, say so warmly.
 - **Attention** (decayed and deadline-urgent) — call `stream_query` twice:
   - With `decay_min: 1.0` → items past their natural lifetime.
   - With `deadline_within: 2` → items with deadlines within 2 days.

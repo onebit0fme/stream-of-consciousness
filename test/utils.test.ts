@@ -7,7 +7,6 @@ import {
   decayProgress,
   computeShortIds,
   resolveShortId,
-  nextRecurrence,
 } from "../src/utils.js";
 
 describe("daysBetween", () => {
@@ -82,18 +81,6 @@ describe("decayProgress", () => {
   it("uses muse's long window", () => {
     // muse decays in 21 days, so 21 days = 1.0
     assert.equal(decayProgress({ startDate: "2025-01-01", type: "muse" }, "2025-01-22"), 1.0);
-  });
-});
-
-describe("nextRecurrence", () => {
-  it("increments when the old copy had decayed (progress >= 1)", () => {
-    assert.equal(nextRecurrence(1, 1.0), 2);
-    assert.equal(nextRecurrence(2, 1.5), 3);
-  });
-
-  it("carries the count forward when the old copy was still fresh", () => {
-    assert.equal(nextRecurrence(1, 0.4), 1);
-    assert.equal(nextRecurrence(3, 0.99), 3);
   });
 });
 

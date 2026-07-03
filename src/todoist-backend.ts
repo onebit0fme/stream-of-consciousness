@@ -6,7 +6,6 @@ import {
   ItemType,
   StreamItem,
   QueryFilters,
-  RECURRENCE_DISPLAY_THRESHOLD,
 } from "./types.js";
 import {
   todayStr,
@@ -14,7 +13,6 @@ import {
   decayProgress,
   computeShortIds,
   resolveShortId,
-  nextRecurrence,
 } from "./utils.js";
 
 // --- Priority Mapping ---
@@ -28,25 +26,6 @@ const TYPE_TO_PRIORITY = Object.fromEntries(
 const PRIORITY_TO_TYPE = Object.fromEntries(
   ITEM_TYPES.map((t, i) => [ITEM_TYPES.length - i, t]),
 ) as Record<number, ItemType>;
-
-// --- Recurrence label ---
-// One system-managed Todoist label `↻N` (N ≥ 2) carries the recurrence count.
-// It's written automatically on restream and never shown in stream content.
-const RECURRENCE_LABEL_RE = /^↻(\d+)$/;
-
-function parseRecurrence(labels: string[] | undefined): number {
-  for (const label of labels ?? []) {
-    const match = RECURRENCE_LABEL_RE.exec(label);
-    if (match) return parseInt(match[1], 10);
-  }
-  return 1;
-}
-
-/** Replace any existing recurrence label, preserving the task's other labels. */
-function withRecurrenceLabel(labels: string[] | undefined, recurrence: number): string[] {
-  const others = (labels ?? []).filter((l) => !RECURRENCE_LABEL_RE.test(l));
-  return recurrence >= RECURRENCE_DISPLAY_THRESHOLD ? [...others, `↻${recurrence}`] : others;
-}
 
 // --- Content split/merge for Todoist's 500-char title limit ---
 // Sentinel "→" signals that the title was truncated and description holds the full text.
@@ -115,7 +94,6 @@ function taskToStreamItem(task: Task, displayId: string): StreamItem {
     deadline: task.deadline?.date ?? null,
     resolvedAt: task.completedAt ?? null,
     createdAt: task.addedAt ?? new Date().toISOString(),
-    recurrence: parseRecurrence(task.labels),
   };
 }
 
@@ -184,17 +162,7 @@ export class TodoistBackend implements StreamBackend {
     startDate: string;
     deadline: string | null;
   }): Promise<StreamItem> {
-    // Only set due date for future start dates; items entering the stream today need no date
-    const isFuture = params.startDate > todayStr();
-    const { content, description } = splitContent(params.content);
-    const task = await this.api.addTask({
-      content,
-      ...(description ? { description } : {}),
-      priority: TYPE_TO_PRIORITY[params.type],
-      ...(isFuture ? { dueDate: params.startDate } : {}),
-      ...(params.deadline ? { deadlineDate: params.deadline } : {}),
-      ...(this.projectId ? { projectId: this.projectId } : {}),
-    } as Parameters<typeof this.api.addTask>[0]);
+    const task = await this.createTask(params);
 
     // Skip the paginated active-set fetch on add — return an optimistic short ID
     // (last 4 chars). The next query will canonicalize it against the full set.
@@ -229,14 +197,8 @@ export class TodoistBackend implements StreamBackend {
 
     const today = todayStr();
 
-    // Recurrence climbs only if the old copy had already decayed (a returning
-    // ghost). Display ID is filled in once it's computed against the old+new
-    // union below.
+    // Display ID is filled in once it's computed against the old+new union below.
     const oldItem = taskToStreamItem(oldTask, "");
-    const recurrence = nextRecurrence(
-      oldItem.recurrence,
-      decayProgress(oldItem, today),
-    );
 
     // Close old task
     await this.api.closeTask(oldTask.id);
@@ -250,18 +212,12 @@ export class TodoistBackend implements StreamBackend {
         ? changes.deadline
         : oldTask.deadline?.date ?? null;
 
-    const isFuture = newStartDate > today;
-    const newLabels = withRecurrenceLabel(oldTask.labels, recurrence);
-    const { content: splitTitle, description: splitDesc } = splitContent(newContent);
-    const newTask = await this.api.addTask({
-      content: splitTitle,
-      ...(splitDesc ? { description: splitDesc } : {}),
-      priority: TYPE_TO_PRIORITY[newType],
-      ...(newLabels.length ? { labels: newLabels } : {}),
-      ...(isFuture ? { dueDate: newStartDate } : {}),
-      ...(newDeadline ? { deadlineDate: newDeadline } : {}),
-      ...(this.projectId ? { projectId: this.projectId } : {}),
-    } as Parameters<typeof this.api.addTask>[0]);
+    const newTask = await this.createTask({
+      content: newContent,
+      type: newType,
+      startDate: newStartDate,
+      deadline: newDeadline,
+    });
 
     // Add lineage comment on the new task
     try {
@@ -283,8 +239,6 @@ export class TodoistBackend implements StreamBackend {
 
     const newItem = taskToStreamItem(newTask, newDisplayId);
     newItem.restreamedFrom = oldTask.id;
-    // Set explicitly: the create response may not echo the label we just wrote.
-    newItem.recurrence = recurrence;
 
     return { old: oldItem, new: newItem };
   }
@@ -359,6 +313,29 @@ export class TodoistBackend implements StreamBackend {
   }
 
   // --- Private helpers ---
+
+  /**
+   * Build a Todoist task from stream params — the shared create path for `add`
+   * and `restream`. Only sets a due date for future start dates; items entering
+   * the stream today need none.
+   */
+  private async createTask(params: {
+    content: string;
+    type: ItemType;
+    startDate: string;
+    deadline: string | null;
+  }): Promise<Task> {
+    const isFuture = params.startDate > todayStr();
+    const { content, description } = splitContent(params.content);
+    return this.api.addTask({
+      content,
+      ...(description ? { description } : {}),
+      priority: TYPE_TO_PRIORITY[params.type],
+      ...(isFuture ? { dueDate: params.startDate } : {}),
+      ...(params.deadline ? { deadlineDate: params.deadline } : {}),
+      ...(this.projectId ? { projectId: this.projectId } : {}),
+    } as Parameters<typeof this.api.addTask>[0]);
+  }
 
   /**
    * Fetch all active tasks, handling pagination.

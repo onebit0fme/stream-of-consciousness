@@ -12,11 +12,9 @@ import {
 import {
   todayStr,
   daysBetween,
-  decayDays,
   decayProgress,
   getActiveFileItems,
   nowIso,
-  nextRecurrence,
 } from "./utils.js";
 
 const STREAM_PATH = path.join(os.homedir(), ".stream-of-consciousness");
@@ -45,7 +43,6 @@ function toStreamItem(item: FileStreamItem): StreamItem {
   return {
     ...item,
     displayId: `#${item.id}`,
-    recurrence: item.recurrence ?? 1,
     restreamedFrom: item.restreamedFrom ?? null,
   };
 }
@@ -67,7 +64,6 @@ export class FileBackend implements StreamBackend {
       deadline: params.deadline,
       resolvedAt: null,
       createdAt: nowIso(),
-      recurrence: 1,
     };
     data.items.push(newItem);
     data.nextId++;
@@ -111,12 +107,6 @@ export class FileBackend implements StreamBackend {
     const today = todayStr();
     oldItem.resolvedAt = nowIso();
 
-    // Recurrence climbs only if the old copy had already decayed (a returning ghost).
-    const recurrence = nextRecurrence(
-      oldItem.recurrence ?? 1,
-      decayProgress(oldItem, today),
-    );
-
     const newItem: FileStreamItem = {
       id: data.nextId,
       // The caller's explicit type wins, else it keeps the old type.
@@ -127,7 +117,6 @@ export class FileBackend implements StreamBackend {
         changes.deadline !== undefined ? changes.deadline : oldItem.deadline,
       resolvedAt: null,
       createdAt: nowIso(),
-      recurrence,
       restreamedFrom: numId,
     };
     data.items.push(newItem);
