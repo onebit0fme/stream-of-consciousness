@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   splitContent,
   mergeContent,
+  foldComments,
+  RESTREAM_LINEAGE_PREFIX,
   CONTENT_LIMIT,
   TRUNCATION_SENTINEL,
 } from "../src/todoist-backend.js";
@@ -117,5 +119,86 @@ describe("splitContent/mergeContent round-trip", () => {
     const original = "x".repeat(600) + "\nsome details";
     const { content, description } = splitContent(original);
     assert.equal(mergeContent(content, description), original);
+  });
+});
+
+// Regression for the restream content-carry-over bug: a restream that doesn't
+// change content must re-carry the FULL text, which is why the Todoist backend
+// reconstructs it with mergeContent(title, description) rather than reusing the
+// bare Todoist title. These lock the invariant that reusing the title alone is
+// lossy — the exact mistake the fix corrected.
+describe("restream content carry-over (regression)", () => {
+  it("multi-line: the bare title drops the body; merge carries it", () => {
+    const original = "CLI for the stream\n\nProbably Rust. Could lift the TS types.";
+    const { content, description } = splitContent(original);
+
+    // The bug reused `content` (the title) alone — which loses the body:
+    assert.notEqual(content, original);
+    assert.ok(!content.includes("Probably Rust"));
+
+    // The fix reuses the merged full content, which keeps the body:
+    assert.ok(mergeContent(content, description).includes("Probably Rust"));
+  });
+
+  it("long single line: the bare title keeps a dangling sentinel; merge recovers full text", () => {
+    const original = "z".repeat(600);
+    const { content, description } = splitContent(original);
+
+    // Reusing the title alone leaves a truncated string ending in the sentinel:
+    assert.ok(content.endsWith(TRUNCATION_SENTINEL));
+    assert.notEqual(content, original);
+
+    // The merged full content is the untruncated original:
+    assert.equal(mergeContent(content, description), original);
+  });
+});
+
+describe("foldComments", () => {
+  const at = (n: number) => `2026-07-0${n}T00:00:00Z`;
+
+  it("returns content unchanged when there are no comments", () => {
+    assert.equal(foldComments("Ship the thing", []), "Ship the thing");
+  });
+
+  it("appends a comment after a blank line", () => {
+    assert.equal(
+      foldComments("Ship the thing", [{ content: "blocked on review", postedAt: at(1) }]),
+      "Ship the thing\n\nblocked on review"
+    );
+  });
+
+  it("folds multiple comments oldest first, regardless of input order", () => {
+    const result = foldComments("Base", [
+      { content: "second", postedAt: at(2) },
+      { content: "first", postedAt: at(1) },
+      { content: "third", postedAt: at(3) },
+    ]);
+    assert.equal(result, "Base\n\nfirst\n\nsecond\n\nthird");
+  });
+
+  it("skips the restream lineage comment", () => {
+    const result = foldComments("Base", [
+      { content: `${RESTREAM_LINEAGE_PREFIX} https://todoist.com/app/task/123`, postedAt: at(1) },
+      { content: "a real note", postedAt: at(2) },
+    ]);
+    assert.equal(result, "Base\n\na real note");
+  });
+
+  it("ignores blank/whitespace-only comments", () => {
+    assert.equal(foldComments("Base", [{ content: "   \n  ", postedAt: at(1) }]), "Base");
+  });
+
+  it("returns content unchanged when only a lineage comment exists", () => {
+    assert.equal(
+      foldComments("Base", [{ content: `${RESTREAM_LINEAGE_PREFIX} x`, postedAt: at(1) }]),
+      "Base"
+    );
+  });
+
+  it("trims surrounding whitespace on each folded comment", () => {
+    assert.equal(
+      foldComments("Base", [{ content: "  padded note  ", postedAt: at(1) }]),
+      "Base\n\npadded note"
+    );
   });
 });

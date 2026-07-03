@@ -1,8 +1,7 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
-import type { Task } from "@doist/todoist-api-typescript";
+import type { Task, Section, Comment } from "@doist/todoist-api-typescript";
 import { StreamBackend, RestreamResult } from "./backend.js";
 import {
-  ITEM_TYPES,
   ItemType,
   StreamItem,
   QueryFilters,
@@ -16,17 +15,40 @@ import {
   isUnchangedRestream,
 } from "./utils.js";
 
-// --- Priority Mapping ---
-// Todoist API: priority 4 = P1/urgent/red, 1 = P4/normal.
-// Derived from ITEM_TYPES' P1→P4 order so a rename/reorder has a single source
-// of truth: live=P1(4), pull=P2(3), muse=P3(2), drift=P4(1).
-const TYPE_TO_PRIORITY = Object.fromEntries(
-  ITEM_TYPES.map((t, i) => [t, ITEM_TYPES.length - i]),
-) as Record<ItemType, number>;
+// --- Section mapping ---
+// Type is carried by the task's Todoist section, which frees the priority flag
+// for the user. Three sections are named verbatim; `drift` lives in no section,
+// so an unsectioned task — or one in any other section — reads as `drift`.
+// Sections are created on demand the first time a type needs one.
+const TYPE_TO_SECTION_NAME: Record<Exclude<ItemType, "drift">, string> = {
+  live: "Live",
+  pull: "Pull",
+  muse: "Muse",
+};
+const SECTION_NAME_TO_TYPE: Record<string, ItemType> = Object.fromEntries(
+  Object.entries(TYPE_TO_SECTION_NAME).map(([type, name]) => [name, type as ItemType]),
+);
 
-const PRIORITY_TO_TYPE = Object.fromEntries(
-  ITEM_TYPES.map((t, i) => [ITEM_TYPES.length - i, t]),
-) as Record<number, ItemType>;
+/** The verbatim section name a type lives in, or null for `drift` (no section). */
+function sectionNameForType(type: ItemType): string | null {
+  return type === "drift" ? null : TYPE_TO_SECTION_NAME[type];
+}
+
+/** Build a section-id → motion-state map, keeping only the three named sections. */
+function buildSectionTypes(sections: Section[]): Map<string, ItemType> {
+  const map = new Map<string, ItemType>();
+  for (const s of sections) {
+    const type = SECTION_NAME_TO_TYPE[s.name];
+    if (type) map.set(s.id, type);
+  }
+  return map;
+}
+
+/** A task's motion-state, from its section (unsectioned/other section → drift). */
+function typeForTask(task: Task, sectionTypes: Map<string, ItemType>): ItemType {
+  if (!task.sectionId) return "drift";
+  return sectionTypes.get(task.sectionId) ?? "drift";
+}
 
 // --- Content split/merge for Todoist's 500-char title limit ---
 // Sentinel "→" signals that the title was truncated and description holds the full text.
@@ -71,6 +93,25 @@ export function mergeContent(content: string, description?: string | null): stri
   return content + "\n\n" + description;
 }
 
+// --- Comment folding ---
+// A task's comments are folded into its content (oldest first), so notes added
+// in the Todoist app surface in the stream and get carried into the body on
+// restream. The lineage comment the backend posts on restream is skipped so it
+// never shows up as body text.
+export const RESTREAM_LINEAGE_PREFIX = "Restreamed from:";
+
+export function foldComments(
+  content: string,
+  comments: Array<{ content: string; postedAt: string }>,
+): string {
+  const notes = comments
+    .filter((c) => !c.content.startsWith(RESTREAM_LINEAGE_PREFIX) && c.content.trim().length > 0)
+    .sort((a, b) => a.postedAt.localeCompare(b.postedAt))
+    .map((c) => c.content.trim());
+  if (notes.length === 0) return content;
+  return [content, ...notes].join("\n\n");
+}
+
 /**
  * Todoist "uncompletable" tasks have a name prefixed with "* " (asterisk + space).
  * They render as headers/notes with no checkbox and aren't real stream items, so
@@ -80,18 +121,23 @@ function isUncompletable(task: Task): boolean {
   return task.content.startsWith("* ");
 }
 
-function taskToStreamItem(task: Task, displayId: string): StreamItem {
-  const type = PRIORITY_TO_TYPE[task.priority] ?? "live";
-  // Use due.date as startDate (stream semantics), fall back to addedAt date
-  const startDate =
-    task.due?.date ?? (task.addedAt ? task.addedAt.slice(0, 10) : todayStr());
+/** Stream start date for a task: its due date (stream semantics), else the date it was added. */
+function taskStartDate(task: Task): string {
+  return task.due?.date ?? (task.addedAt ? task.addedAt.slice(0, 10) : todayStr());
+}
 
+function taskToStreamItem(
+  task: Task,
+  displayId: string,
+  type: ItemType,
+  comments: Comment[] = [],
+): StreamItem {
   return {
     id: task.id,
     displayId,
     type,
-    content: mergeContent(task.content, task.description),
-    startDate,
+    content: foldComments(mergeContent(task.content, task.description), comments),
+    startDate: taskStartDate(task),
     deadline: task.deadline?.date ?? null,
     resolvedAt: task.completedAt ?? null,
     createdAt: task.addedAt ?? new Date().toISOString(),
@@ -146,9 +192,29 @@ function nativeFetchAdapter(
   });
 }
 
+/**
+ * Drain a cursor-paginated Todoist endpoint into a flat array. `fetchPage`
+ * issues one request for the given cursor and normalizes the response to
+ * `{ items, nextCursor }`, hiding the SDK's `.results` vs `.items` shape split.
+ */
+async function collectPaginated<T>(
+  fetchPage: (cursor: string | null) => Promise<{ items: T[]; nextCursor: string | null }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const { items, nextCursor } = await fetchPage(cursor);
+    all.push(...items);
+    cursor = nextCursor;
+  } while (cursor);
+  return all;
+}
+
 export class TodoistBackend implements StreamBackend {
   private api: TodoistApi;
   private projectId: string | undefined;
+  // Resolved lazily and cached, only in no-project mode, to place sections/tasks in the Inbox.
+  private inboxProjectId: string | undefined;
 
   constructor(token: string, projectId?: string, options?: TodoistBackendOptions) {
     this.api = options?.useNativeFetch
@@ -163,22 +229,29 @@ export class TodoistBackend implements StreamBackend {
     startDate: string;
     deadline: string | null;
   }): Promise<StreamItem> {
-    const task = await this.createTask(params);
+    const sectionId = await this.resolveSectionId(params.type);
+    const task = await this.createTask(params, sectionId);
 
     // Skip the paginated active-set fetch on add — return an optimistic short ID
     // (last 4 chars). The next query will canonicalize it against the full set.
-    return taskToStreamItem(task, task.id.slice(-4));
+    return taskToStreamItem(task, task.id.slice(-4), params.type);
   }
 
   async resolve(id: number | string): Promise<StreamItem | null> {
     const strId = String(id);
-    const { task, shortIds } = await this.findTaskWithContext(strId);
+    const [{ task, shortIds }, sectionTypes] = await Promise.all([
+      this.findTaskWithContext(strId),
+      this.fetchSectionTypes(),
+    ]);
     if (!task) return null;
 
-    await this.api.closeTask(task.id);
-
     const displayId = shortIds.get(task.id) ?? task.id.slice(-4);
-    const item = taskToStreamItem(task, displayId);
+    // Close and read comments together — the comment read doesn't depend on the close.
+    const [, comments] = await Promise.all([
+      this.api.closeTask(task.id),
+      this.fetchTaskComments(task.id),
+    ]);
+    const item = taskToStreamItem(task, displayId, typeForTask(task, sectionTypes), comments);
     item.resolvedAt = new Date().toISOString();
     return item;
   }
@@ -193,41 +266,60 @@ export class TodoistBackend implements StreamBackend {
     },
   ): Promise<RestreamResult> {
     const strId = String(id);
-    const { task: oldTask, allIds } = await this.findTaskWithContext(strId);
+    const [{ task: oldTask, allIds }, sections] = await Promise.all([
+      this.findTaskWithContext(strId),
+      this.fetchSections(),
+    ]);
     if (!oldTask) return { status: "not_found" };
 
     const today = todayStr();
+    const oldComments = await this.fetchTaskComments(oldTask.id);
+    const oldType = typeForTask(oldTask, buildSectionTypes(sections));
 
     // Display ID is filled in once it's computed against the old+new union below.
-    const oldItem = taskToStreamItem(oldTask, "");
+    // Content includes any folded comments, so restream carries them into the
+    // new task's body.
+    const mergedContent = mergeContent(oldTask.content, oldTask.description);
+    const oldItem = taskToStreamItem(oldTask, "", oldType, oldComments);
 
-    // Reject a no-op restream before closing anything — it would just churn the item.
-    if (isUnchangedRestream(oldItem, changes)) return { status: "unchanged" };
+    // Reject a no-op restream before closing anything — but folding pending
+    // comments into the body IS a change (folded content differs from the stored
+    // content), so it's never a no-op.
+    const foldsComments = oldItem.content !== mergedContent;
+    if (!foldsComments && isUnchangedRestream(oldItem, changes)) {
+      return { status: "unchanged" };
+    }
 
     // Close old task
     await this.api.closeTask(oldTask.id);
 
     // Create new task — the caller's explicit type wins, else it keeps the old type.
-    const newType = changes.type ?? oldItem.type;
-    const newContent = changes.content ?? oldTask.content;
+    const newType = changes.type ?? oldType;
+    // Carry over the FULL old content (oldItem.content is title+description
+    // merged); using oldTask.content — the bare Todoist title — would silently
+    // drop the description on any restream that doesn't change content.
+    const newContent = changes.content ?? oldItem.content;
     const newStartDate = changes.startDate ?? today;
     const newDeadline =
       changes.deadline !== undefined
         ? changes.deadline
         : oldTask.deadline?.date ?? null;
 
-    const newTask = await this.createTask({
-      content: newContent,
-      type: newType,
-      startDate: newStartDate,
-      deadline: newDeadline,
-    });
+    const newSectionId = await this.resolveSectionId(newType, sections);
+    const newTask = await this.createTask(
+      {
+        content: newContent,
+        startDate: newStartDate,
+        deadline: newDeadline,
+      },
+      newSectionId,
+    );
 
     // Add lineage comment on the new task
     try {
       await this.api.addComment({
         taskId: newTask.id,
-        content: `Restreamed from: ${oldTask.url}`,
+        content: `${RESTREAM_LINEAGE_PREFIX} ${oldTask.url}`,
       });
     } catch {
       // Non-fatal: lineage comment is nice-to-have
@@ -241,7 +333,7 @@ export class TodoistBackend implements StreamBackend {
     oldItem.displayId = oldDisplayId;
     oldItem.resolvedAt = new Date().toISOString();
 
-    const newItem = taskToStreamItem(newTask, newDisplayId);
+    const newItem = taskToStreamItem(newTask, newDisplayId, newType);
     newItem.restreamedFrom = oldTask.id;
 
     return { status: "ok", old: oldItem, new: newItem };
@@ -250,7 +342,15 @@ export class TodoistBackend implements StreamBackend {
   async query(filters: QueryFilters): Promise<StreamItem[]> {
     const today = todayStr();
 
-    const allActive = await this.fetchAllActiveTasks();
+    // In single-project mode the comment sweep is always the one project, so fetch
+    // it up front in parallel with the tasks instead of tailing the pipeline.
+    const [allActive, sectionTypes, projectComments] = await Promise.all([
+      this.fetchAllActiveTasks(),
+      this.fetchSectionTypes(),
+      this.projectId
+        ? this.fetchCommentsByTask([this.projectId])
+        : Promise.resolve(null),
+    ]);
     const allActiveIds = allActive.map((t) => t.id);
 
     let tasks: Task[] = [];
@@ -277,26 +377,27 @@ export class TodoistBackend implements StreamBackend {
       );
     }
 
-    // Type filter (via priority mapping)
+    // Type filter (via section)
     if (filters.type && filters.type.length > 0) {
-      const priorities = filters.type.map((t) => TYPE_TO_PRIORITY[t]);
-      tasks = tasks.filter((t) => priorities.includes(t.priority));
+      const wanted = new Set(filters.type);
+      tasks = tasks.filter((t) => wanted.has(typeForTask(t, sectionTypes)));
     }
 
-    // Decay filters (active items only)
+    // Decay filters (active items only) — a cheap {startDate, type} projection,
+    // not a full item (content/comment reconstruction is unused here).
     if (filters.decay_min !== undefined) {
       tasks = tasks.filter((t) => {
         if (t.completedAt) return false;
-        const item = taskToStreamItem(t, "");
-        return decayProgress(item, today) >= filters.decay_min!;
+        const view = { startDate: taskStartDate(t), type: typeForTask(t, sectionTypes) };
+        return decayProgress(view, today) >= filters.decay_min!;
       });
     }
 
     if (filters.decay_max !== undefined) {
       tasks = tasks.filter((t) => {
         if (t.completedAt) return false;
-        const item = taskToStreamItem(t, "");
-        return decayProgress(item, today) < filters.decay_max!;
+        const view = { startDate: taskStartDate(t), type: typeForTask(t, sectionTypes) };
+        return decayProgress(view, today) < filters.decay_max!;
       });
     }
 
@@ -311,8 +412,18 @@ export class TodoistBackend implements StreamBackend {
 
     const shortIds = computeShortIds(allActiveIds);
 
+    // Multi-project fallback: sweep only the projects present in the result set.
+    const commentsByTask =
+      projectComments ??
+      (await this.fetchCommentsByTask([...new Set(tasks.map((t) => t.projectId))]));
+
     return tasks.map((t) =>
-      taskToStreamItem(t, shortIds.get(t.id) ?? t.id.slice(0, 4))
+      taskToStreamItem(
+        t,
+        shortIds.get(t.id) ?? t.id.slice(0, 4),
+        typeForTask(t, sectionTypes),
+        commentsByTask.get(t.id) ?? [],
+      )
     );
   }
 
@@ -320,21 +431,20 @@ export class TodoistBackend implements StreamBackend {
 
   /**
    * Build a Todoist task from stream params — the shared create path for `add`
-   * and `restream`. Only sets a due date for future start dates; items entering
-   * the stream today need none.
+   * and `restream`. The caller passes the resolved section id (null for `drift`);
+   * type lives in the section, not the priority flag. Only sets a due date for
+   * future start dates; items entering the stream today need none.
    */
-  private async createTask(params: {
-    content: string;
-    type: ItemType;
-    startDate: string;
-    deadline: string | null;
-  }): Promise<Task> {
+  private async createTask(
+    params: { content: string; startDate: string; deadline: string | null },
+    sectionId: string | null,
+  ): Promise<Task> {
     const isFuture = params.startDate > todayStr();
     const { content, description } = splitContent(params.content);
     return this.api.addTask({
       content,
       ...(description ? { description } : {}),
-      priority: TYPE_TO_PRIORITY[params.type],
+      ...(sectionId ? { sectionId } : {}),
       ...(isFuture ? { dueDate: params.startDate } : {}),
       ...(params.deadline ? { deadlineDate: params.deadline } : {}),
       ...(this.projectId ? { projectId: this.projectId } : {}),
@@ -342,21 +452,93 @@ export class TodoistBackend implements StreamBackend {
   }
 
   /**
+   * All sections in scope: the configured project's, or every project's when no
+   * project is set (so reads across the account can still resolve a task's type).
+   */
+  private async fetchSections(): Promise<Section[]> {
+    return collectPaginated(async (cursor) => {
+      const response = await this.api.getSections({
+        ...(this.projectId ? { projectId: this.projectId } : {}),
+        ...(cursor ? { cursor } : {}),
+      } as Parameters<typeof this.api.getSections>[0]);
+      return { items: response.results, nextCursor: response.nextCursor };
+    });
+  }
+
+  /** Section-id → motion-state map for the sections in scope. */
+  private async fetchSectionTypes(): Promise<Map<string, ItemType>> {
+    return buildSectionTypes(await this.fetchSections());
+  }
+
+  /**
+   * The section id a type belongs in, creating the section if it doesn't exist
+   * yet. Returns null for `drift`, which lives in no section. Pass an already
+   * fetched section list to avoid a redundant round-trip.
+   */
+  private async resolveSectionId(
+    type: ItemType,
+    sections?: Section[],
+  ): Promise<string | null> {
+    const name = sectionNameForType(type);
+    if (name === null) return null;
+
+    const projectId = await this.resolveWriteProjectId();
+    const list = sections ?? (await this.fetchSections());
+    const existing = list.find(
+      (s) => s.name === name && s.projectId === projectId && !s.isArchived,
+    );
+    if (existing) return existing.id;
+
+    const created = await this.api.addSection({ name, projectId });
+    return created.id;
+  }
+
+  /**
+   * Project that new sections and tasks are written to: the configured project,
+   * else the account's Inbox (looked up once and cached).
+   */
+  private async resolveWriteProjectId(): Promise<string> {
+    if (this.projectId) return this.projectId;
+
+    if (!this.inboxProjectId) {
+      let cursor: string | null = null;
+      do {
+        const args: Record<string, unknown> = {};
+        if (cursor) args.cursor = cursor;
+
+        const response = await this.api.getProjects(
+          args as Parameters<typeof this.api.getProjects>[0],
+        );
+        const inbox = response.results.find(
+          (p) => "inboxProject" in p && p.inboxProject,
+        );
+        if (inbox) {
+          this.inboxProjectId = inbox.id;
+          break;
+        }
+        cursor = response.nextCursor;
+      } while (cursor);
+    }
+
+    if (!this.inboxProjectId) {
+      throw new Error(
+        "Could not resolve the Todoist Inbox project for section placement.",
+      );
+    }
+    return this.inboxProjectId;
+  }
+
+  /**
    * Fetch all active tasks, handling pagination.
    */
   private async fetchAllActiveTasks(): Promise<Task[]> {
-    const allTasks: Task[] = [];
-    let cursor: string | null = null;
-
-    do {
-      const args: Record<string, unknown> = {};
-      if (this.projectId) args.projectId = this.projectId;
-      if (cursor) args.cursor = cursor;
-
-      const response = await this.api.getTasks(args);
-      allTasks.push(...response.results);
-      cursor = response.nextCursor;
-    } while (cursor);
+    const allTasks = await collectPaginated(async (cursor) => {
+      const response = await this.api.getTasks({
+        ...(this.projectId ? { projectId: this.projectId } : {}),
+        ...(cursor ? { cursor } : {}),
+      } as Parameters<typeof this.api.getTasks>[0]);
+      return { items: response.results, nextCursor: response.nextCursor };
+    });
 
     // Hide "uncompletable" header/note tasks ("* ...") from the stream entirely.
     const tasks = allTasks.filter((t) => !isUncompletable(t));
@@ -380,25 +562,18 @@ export class TodoistBackend implements StreamBackend {
    */
   private async fetchCompletedTasks(): Promise<Task[]> {
     try {
-      const allTasks: Task[] = [];
       const now = new Date();
       const since = new Date(now.getTime() - 90 * 86400000);
-      let cursor: string | null = null;
 
-      do {
-        const args: Record<string, unknown> = {
+      const allTasks = await collectPaginated(async (cursor) => {
+        const response = await this.api.getCompletedTasksByCompletionDate({
           since: since.toISOString(),
           until: now.toISOString(),
-        };
-        if (this.projectId) args.projectId = this.projectId;
-        if (cursor) args.cursor = cursor;
-
-        const response = await this.api.getCompletedTasksByCompletionDate(
-          args as Parameters<typeof this.api.getCompletedTasksByCompletionDate>[0],
-        );
-        allTasks.push(...response.items);
-        cursor = response.nextCursor;
-      } while (cursor);
+          ...(this.projectId ? { projectId: this.projectId } : {}),
+          ...(cursor ? { cursor } : {}),
+        } as Parameters<typeof this.api.getCompletedTasksByCompletionDate>[0]);
+        return { items: response.items, nextCursor: response.nextCursor };
+      });
 
       // Hide "uncompletable" header/note tasks ("* ...") from the stream entirely.
       return allTasks.filter((t) => !isUncompletable(t));
@@ -406,6 +581,51 @@ export class TodoistBackend implements StreamBackend {
       // Completed tasks API may not be available on all plans
       return [];
     }
+  }
+
+  /**
+   * All non-deleted comments on a single task, handling pagination.
+   */
+  private async fetchTaskComments(taskId: string): Promise<Comment[]> {
+    const all = await collectPaginated(async (cursor) => {
+      const response = await this.api.getComments({
+        taskId,
+        ...(cursor ? { cursor } : {}),
+      } as Parameters<typeof this.api.getComments>[0]);
+      return { items: response.results, nextCursor: response.nextCursor };
+    });
+    return all.filter((c) => !c.isDeleted);
+  }
+
+  /**
+   * Comments for many tasks in one sweep: one paginated `getComments` per
+   * distinct project (so a whole query costs a single call in the common
+   * one-project setup), grouped by task id.
+   */
+  private async fetchCommentsByTask(
+    projectIds: string[],
+  ): Promise<Map<string, Comment[]>> {
+    const byTask = new Map<string, Comment[]>();
+
+    await Promise.all(
+      projectIds.map(async (projectId) => {
+        const comments = await collectPaginated(async (cursor) => {
+          const response = await this.api.getComments({
+            projectId,
+            ...(cursor ? { cursor } : {}),
+          } as Parameters<typeof this.api.getComments>[0]);
+          return { items: response.results, nextCursor: response.nextCursor };
+        });
+        for (const c of comments) {
+          if (c.isDeleted || !c.taskId) continue;
+          const list = byTask.get(c.taskId);
+          if (list) list.push(c);
+          else byTask.set(c.taskId, [c]);
+        }
+      }),
+    );
+
+    return byTask;
   }
 
   /**

@@ -16,8 +16,10 @@ export const DECAY: Record<string, number> = {
   drift: 5,
 };
 
-// Ordered highest→lowest priority (P1→P4). This order is load-bearing: the
-// Todoist priority mapping derives from it (priority = ITEM_TYPES.length - index).
+// The four motion-states, ordered by how much attention they warrant (live →
+// drift). Single source for the ItemType union, the tool enums, and the docs.
+// The Todoist backend carries type via named sections (Live/Pull/Muse), not
+// priority — so the flag is free for the user.
 export const ITEM_TYPES = ["live", "pull", "muse", "drift"] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 

@@ -28,14 +28,14 @@ Always use these tools — never reason about the state of the stream from memor
 
 ## Motion-states (the four types) and decay periods
 
-Type doesn't classify what an item is *about* — it classifies what your attention is **doing** with it. William James saw thought as "flights and perchings": attention lands and rests on a **perch** (a stable thing you can point at — a conclusion, a definite item), then moves between landings in a **flight** (the pull, the transition — real mental activity, but hard to point at because it's a motion, not a thing). Cross perch-vs-flight with directed-vs-free and you get four motion-states. Each maps to a Todoist priority flag and has its own decay window.
+Type doesn't classify what an item is *about* — it classifies what your attention is **doing** with it. William James saw thought as "flights and perchings": attention lands and rests on a **perch** (a stable thing you can point at — a conclusion, a definite item), then moves between landings in a **flight** (the pull, the transition — real mental activity, but hard to point at because it's a motion, not a thing). Cross perch-vs-flight with directed-vs-free and you get four motion-states, each with its own decay window.
 
-| Type | Flag | In a word | Decay | What it is / defining test |
-|------|------|-----------|-------|----------------------------|
-| `live` | P1 | doing | 7 days | **Directed perch** — a foot is already down, you're working on it *now* (not planning to, *are*). *"Would I act on it today?"* Engagement, not intention. |
-| `pull` | P2 | avoiding | 4 days | **Directed flight** — a known action you keep *not* starting. You know exactly what doing it looks like; the circling *is* the pull. *"I keep thinking about it but haven't started."* Shortest window by design: a pull should resolve or reveal fast. |
-| `muse` | P3 | returning | 21 days | **Free perch** — no action exists, but you keep coming back to reread and sit with it because it keeps giving. *"There's nothing to *do* — I revisit it to chew on it."* Longest window: it's allowed to persist. |
-| `drift` | P4 | wondering | 5 days | **Free flight** — interesting, but ask "so what would you *do*?" and you'd shrug. Novelty for its own sake (seeds, what-ifs, saved links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
+| Type | In a word | Decay | What it is / defining test |
+|------|-----------|-------|----------------------------|
+| `live` | doing | 7 days | **Directed perch** — a foot is already down, you're working on it *now* (not planning to, *are*). *"Would I act on it today?"* Engagement, not intention. |
+| `pull` | avoiding | 4 days | **Directed flight** — a known action you keep *not* starting. You know exactly what doing it looks like; the circling *is* the pull. *"I keep thinking about it but haven't started."* Shortest window by design: a pull should resolve or reveal fast. |
+| `muse` | returning | 21 days | **Free perch** — no action exists, but you keep coming back to reread and sit with it because it keeps giving. *"There's nothing to *do* — I revisit it to chew on it."* Longest window: it's allowed to persist. |
+| `drift` | wondering | 5 days | **Free flight** — interesting, but ask "so what would you *do*?" and you'd shrug. Novelty for its own sake (seeds, what-ifs, saved links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
 
 Two questions sort anything: **(1) Is there a concrete action?** No → `drift` or `muse`. Yes → `live` or `pull`. Then **(2)** if no action, new-and-sparkly = `drift` / something you keep returning to = `muse`; if action, in motion = `live` / circling it = `pull`. When unsure, default to `live`.
 
@@ -141,7 +141,7 @@ Pick the view that matches the user's question:
 
 ## The Restream Rewrite Deck
 
-Restream exists to force **cognitive re-encoding** — its job is to make the user *re-perceive* the item, not to log that it came back. Re-reading an unchanged summary produces semantic satiation: you register the label, not the thing under it. That's why an as-is restream is refused (see "Restreaming an item" above) and why the stream keeps **no recurrence counter** — a bare "came back an Nth time" tally let items slip through the decay guard untouched, giving the illusion of attention while nothing was re-thought. That silent bypass is the exact failure the stream is built to prevent.
+Restream exists to force **cognitive re-encoding** — its job is to make the user *re-perceive* the item, not just to log that it came back. Re-reading an unchanged summary produces semantic satiation: you register the label, not the thing under it. That's why an as-is restream is refused (see "Restreaming an item" above) — merely noting that something resurfaced, with no re-thinking, is the illusion of attention while the item slips through the decay guard untouched. That silent bypass is the exact failure the stream is built to prevent.
 
 So when an item resurfaces and earns a restream, don't just touch it — **rewrite it**. Below are twelve rewrite techniques. Pick the one that fits the item (each lists what it's **best for**), run it *with* the user — draw the card, ask the question, do the deletion — and restream whatever it dislodges. Recommend a technique by name; the user built this deck deliberately.
 
@@ -219,7 +219,7 @@ So when an item resurfaces and earns a restream, don't just touch it — **rewri
 ### 11. Distanced Rewrite (Third Person)
 **Origin:** Self-distancing research (Kross, 2016; Orvell et al., 2020; Guo 2022 meta-analysis) — reflecting on experiences in third person or by name reduces emotional reactivity across intensity levels at almost no cognitive cost, strongest when externalized through writing.
 **Run it:** Rewrite the item about a character with the user's name, then answer as an outside advisor would: "What is [Name]'s actual problem? What would you tell [Name] to do?"
-**Best for:** Emotionally loaded items; anything the user flinches from opening. Pairs naturally with ostranenie and register shift.
+**Best for:** Emotionally loaded items; anything the user flinches from opening. Pairs naturally with defamiliarization and register shift.
 **Example:** *"Alex has been avoiding the landlord's message for three weeks. Alex can afford the increase but hasn't decided whether to stay in the city. Alex should decouple the two: reply asking for terms now, decide about the city separately."* — advice you'd give a friend in one pass, and couldn't give yourself in three weeks.
 
 ### 12. Affect Labeling

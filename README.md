@@ -10,12 +10,14 @@ Designed for brains that don't do well with traditional task management.
 
 Everything in the stream has a **type** and a **decay period**. Type is a *motion-state* — it classifies what your attention is *doing* with an item, not what it's about. From William James's "flights and perchings": two are **perches** (attention landed and resting) and two are **flights** (the movement between), crossed with directed-vs-free:
 
-| Type | Flag | In a word | Decay | What it is |
-|------|------|-----------|-------|------------|
-| live | P1 | doing | 7 days | Directed perch — a foot is already down, you're working on it now. *Would I act on it today?* |
-| pull | P2 | avoiding | 4 days | Directed flight — a known action you keep not starting. You know the next step; you just haven't. Shortest by design: resolve or reveal, fast. |
-| muse | P3 | returning | 21 days | Free perch — no action, but you keep coming back to sit with it because it keeps giving. Longest: it's allowed to persist. |
-| drift | P4 | wondering | 5 days | Free flight — interesting with no landing in sight; ask "so what would you do?" and you'd shrug. Fading is the feature — what matters resurfaces on its own. |
+![](./docs/stream-types.png)
+
+| Type | In a word | Decay | What it is |
+|------|-----------|-------|------------|
+| live | doing | 7 days | Directed perch — a foot is already down, you're working on it now. *Would I act on it today?* |
+| pull | avoiding | 4 days | Directed flight — a known action you keep not starting. You know the next step; you just haven't. Shortest by design: resolve or reveal, fast. |
+| muse | returning | 21 days | Free perch — no action, but you keep coming back to sit with it because it keeps giving. Longest: it's allowed to persist. |
+| drift | wondering | 5 days | Free flight — interesting with no landing in sight; ask "so what would you do?" and you'd shrug. Fading is the feature — what matters resurfaces on its own. |
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
@@ -102,15 +104,16 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 
 | Stream concept | Todoist field |
 |---------------|---------------|
-| type / motion-state (live/pull/muse/drift) | priority (P1/P2/P3/P4) |
+| type / motion-state (live/pull/muse/drift) | section: `Live` / `Pull` / `Muse` — `drift` has no section (sections auto-created on demand) |
 | content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
+| comments | folded into content (oldest first); carried into the body on restream |
 | start date | due date (future only) |
 | deadline | deadline |
 | item ID | short unique suffix of Todoist task ID |
 
 **Date handling:** Items with a future start date get a Todoist due date so they stay out of the stream until that date arrives. Items entering the stream today (or with a past start date) have no due date set — this avoids cluttering Todoist with "overdue" markers. Any existing due dates that have reached today are automatically cleared when the stream is read.
 
-Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original.
+Items added directly in Todoist (e.g., from mobile) are automatically picked up. The task's **section** determines its type (`Live`/`Pull`/`Muse`; no section = `drift`), so the priority flag is left entirely free for your own use. **Comments** on a task (e.g. notes jotted from mobile) are folded into its content, oldest first, and become part of the item's body when it's restreamed. Restreaming adds a comment on the new task linking back to the original.
 
 ## Skills
 
