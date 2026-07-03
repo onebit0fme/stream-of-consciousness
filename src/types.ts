@@ -19,7 +19,7 @@ export const DECAY: Record<string, number> = {
 // The four motion-states, ordered by how much attention they warrant (live →
 // drift). Single source for the ItemType union, the tool enums, and the docs.
 // The Todoist backend carries type via named sections (Live/Pull/Muse), not
-// priority — so the flag is free for the user.
+// priority — the priority flag instead carries the item's hook (see HOOKS).
 export const ITEM_TYPES = ["live", "pull", "muse", "drift"] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -47,7 +47,6 @@ export interface StreamItem {
   hook: Hook | null;
   resolvedAt: string | null;
   createdAt: string;
-  restreamedFrom?: number | string | null;
 }
 
 /** Internal file-backend storage format */
@@ -66,7 +65,6 @@ export interface FileStreamItem {
   hook: Hook | null;
   resolvedAt: string | null;
   createdAt: string;
-  restreamedFrom?: number | null;
 }
 
 // --- Query Filters ---

@@ -138,16 +138,13 @@ export function mergeContent(content: string, description?: string | null): stri
 // --- Comment folding ---
 // A task's comments are folded into its content (oldest first), so notes added
 // in the Todoist app surface in the stream and get carried into the body on
-// restream. The lineage comment the backend posts on restream is skipped so it
-// never shows up as body text.
-export const RESTREAM_LINEAGE_PREFIX = "Restreamed from:";
-
+// restream.
 export function foldComments(
   content: string,
   comments: Array<{ content: string; postedAt: string }>,
 ): string {
   const notes = comments
-    .filter((c) => !c.content.startsWith(RESTREAM_LINEAGE_PREFIX) && c.content.trim().length > 0)
+    .filter((c) => c.content.trim().length > 0)
     .sort((a, b) => a.postedAt.localeCompare(b.postedAt))
     .map((c) => c.content.trim());
   if (notes.length === 0) return content;
@@ -351,16 +348,6 @@ export class TodoistBackend implements StreamBackend {
       newSectionId,
     );
 
-    // Add lineage comment on the new task
-    try {
-      await this.api.addComment({
-        taskId: newTask.id,
-        content: `${RESTREAM_LINEAGE_PREFIX} ${oldTask.url}`,
-      });
-    } catch {
-      // Non-fatal: lineage comment is nice-to-have
-    }
-
     // Compute display IDs once over the union (old + new) so both render against the same set.
     const shortIds = computeShortIds([...allIds, newTask.id]);
     const oldDisplayId = shortIds.get(oldTask.id) ?? oldTask.id.slice(-4);
@@ -370,7 +357,6 @@ export class TodoistBackend implements StreamBackend {
     oldItem.resolvedAt = new Date().toISOString();
 
     const newItem = taskToStreamItem(newTask, newDisplayId, newType);
-    newItem.restreamedFrom = oldTask.id;
 
     return { status: "ok", old: oldItem, new: newItem };
   }

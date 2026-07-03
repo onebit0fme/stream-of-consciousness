@@ -14,7 +14,7 @@ export type RestreamResult =
 
 /**
  * Outcome of an update (a light metadata touch — hook and/or deadline):
- *  - `ok`        — the item was patched in place (no decay reset, no lineage).
+ *  - `ok`        — the item was patched in place (no decay reset, no new version).
  *  - `not_found` — no active item matched the given ID.
  */
 export type UpdateResult =
@@ -51,7 +51,7 @@ export interface StreamBackend {
 
   /**
    * Patch an item's hook and/or deadline without re-encoding it: no decay-clock
-   * reset, no lineage. This is the light-touch counterpart to {@link restream},
+   * reset, no new version. This is the light-touch counterpart to {@link restream},
    * which is reserved for genuine content/type re-encodings. Only the fields
    * present in `changes` are written (a `null` clears; an omitted field is left
    * as-is).

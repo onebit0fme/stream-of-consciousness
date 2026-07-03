@@ -4,7 +4,6 @@ import {
   splitContent,
   mergeContent,
   foldComments,
-  RESTREAM_LINEAGE_PREFIX,
   CONTENT_LIMIT,
   TRUNCATION_SENTINEL,
 } from "../src/todoist-backend.js";
@@ -176,23 +175,8 @@ describe("foldComments", () => {
     assert.equal(result, "Base\n\nfirst\n\nsecond\n\nthird");
   });
 
-  it("skips the restream lineage comment", () => {
-    const result = foldComments("Base", [
-      { content: `${RESTREAM_LINEAGE_PREFIX} https://todoist.com/app/task/123`, postedAt: at(1) },
-      { content: "a real note", postedAt: at(2) },
-    ]);
-    assert.equal(result, "Base\n\na real note");
-  });
-
   it("ignores blank/whitespace-only comments", () => {
     assert.equal(foldComments("Base", [{ content: "   \n  ", postedAt: at(1) }]), "Base");
-  });
-
-  it("returns content unchanged when only a lineage comment exists", () => {
-    assert.equal(
-      foldComments("Base", [{ content: `${RESTREAM_LINEAGE_PREFIX} x`, postedAt: at(1) }]),
-      "Base"
-    );
   });
 
   it("trims surrounding whitespace on each folded comment", () => {

@@ -148,8 +148,8 @@ The server exposes four tools — same surface on every path:
 | `stream_add` | Add a new item (content, type, startDate, deadline, hook) |
 | `stream_resolve` | Resolve an item by ID |
 | `stream_query` | Query items with filters (text search, type, status, decay range, deadline proximity) |
-| `stream_restream` | Resolve an item and create a new version with lineage tracking |
-| `stream_update` | Set an item's hook and/or deadline in place — no decay reset, no lineage |
+| `stream_restream` | Resolve an item and create a new version of it — an atomic re-encoding |
+| `stream_update` | Set an item's hook and/or deadline in place — no decay reset, no new version |
 
 ## Development
 

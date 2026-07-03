@@ -51,7 +51,6 @@ function toStreamItem(item: FileStreamItem): StreamItem {
     ...item,
     displayId: `#${item.id}`,
     hook: item.hook ?? null,
-    restreamedFrom: item.restreamedFrom ?? null,
   };
 }
 
@@ -120,7 +119,6 @@ export class FileBackend implements StreamBackend {
       hook: changes.hook !== undefined ? changes.hook : (oldItem.hook ?? null),
       resolvedAt: null,
       createdAt: nowIso(),
-      restreamedFrom: numId,
     };
     data.items.push(newItem);
     data.nextId++;

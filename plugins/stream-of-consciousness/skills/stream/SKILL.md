@@ -22,8 +22,8 @@ The user has the Stream of Consciousness MCP server installed. It exposes a pers
 | `stream_add` | Add a new item (content, type, startDate, deadline, hook) |
 | `stream_resolve` | Resolve an item by ID |
 | `stream_query` | Query items with filters (query, type, status, decay_min, decay_max, deadline_within) |
-| `stream_restream` | Resolve an item and create a new version with lineage |
-| `stream_update` | Set an item's hook and/or deadline in place — no decay reset, no lineage |
+| `stream_restream` | Resolve an item and create a new version of it — a re-encoding |
+| `stream_update` | Set an item's hook and/or deadline in place — no decay reset, no new version |
 
 Always use these tools — never reason about the state of the stream from memory.
 
@@ -87,7 +87,7 @@ The stream is the source of truth — not your context window. Flow with it in r
 
 - When something is done → `stream_resolve` it immediately.
 - When something new comes up → `stream_add` it immediately.
-- When something changes → `stream_restream` it (resolves the old, creates a new version with lineage).
+- When something changes → `stream_restream` it (resolves the old, creates a new version).
 - When the user shares an update → capture it right then, not at end of session.
 
 Do not batch. Do not defer. Do not maintain your own tracking tables or summaries. The stream of resolved and added items **is** the record of what happened.
@@ -107,7 +107,7 @@ Do not batch. Do not defer. Do not maintain your own tracking tables or summarie
 
 **Restream ≠ resolve.** Restreaming keeps the item in the stream with a new version. Only restream if the item still has life — there's more to do, track, or deliver. If the work is finished and there's nothing left to track, resolve it instead.
 
-**Update ≠ restream.** Setting a hook or nudging a deadline is a `stream_update` — it changes metadata, not meaning, so it must *not* reset decay or create lineage. Only restream when the item's content or type genuinely changed.
+**Update ≠ restream.** Setting a hook or nudging a deadline is a `stream_update` — it changes metadata, not meaning, so it must *not* reset decay or create a new version. Only restream when the item's content or type genuinely changed.
 
 The only time to pause and ask is when intent is genuinely ambiguous — you can't tell which item the user means, or whether something is new vs. an update. Even then, prefer making your best guess and acting over asking.
 
@@ -171,7 +171,7 @@ Example parsings (note how type follows the *motion*, not the subject):
 
 ### Updating a hook or deadline (no restream)
 
-Some changes aren't re-encodings and must not reset decay: setting or changing an item's **hook**, or adjusting a **deadline** (a date slipped, a new hard date appeared). Use `stream_update` for these — it patches the item in place, no lineage, no decay reset. Reserve `stream_restream` for genuine content/type re-encodings. Rule of thumb: if the *meaning* of the item didn't change, it's an update, not a restream.
+Some changes aren't re-encodings and must not reset decay: setting or changing an item's **hook**, or adjusting a **deadline** (a date slipped, a new hard date appeared). Use `stream_update` for these — it patches the item in place, no decay reset. Reserve `stream_restream` for genuine content/type re-encodings. Rule of thumb: if the *meaning* of the item didn't change, it's an update, not a restream.
 
 ### Showing the stream
 

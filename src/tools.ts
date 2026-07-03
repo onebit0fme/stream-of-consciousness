@@ -175,10 +175,6 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
           line += `, hook: ${item.hook}`;
         }
 
-        if (item.restreamedFrom) {
-          line += `, restreamed from ${item.restreamedFrom}`;
-        }
-
         return line;
       });
 
@@ -195,7 +191,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
 
   server.tool(
     "stream_restream",
-    "Resolve an item and create a new version of it — atomic restream with lineage link. Requires at least one changed field (content, type, startDate, or deadline); an unchanged restream is rejected — resolve the item instead.",
+    "Resolve an item and create a new version of it — an atomic re-encoding. Requires at least one changed field (content, type, startDate, or deadline); an unchanged restream is rejected — resolve the item instead.",
     {
       id: z
         .union([z.number().int(), z.string()])
@@ -269,7 +265,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
 
   server.tool(
     "stream_update",
-    "Update an item's hook and/or deadline in place — a light touch that does NOT reset the decay clock or create lineage. Use this to set the engagement hook or adjust a deadline. Reach for stream_restream instead only when the item's content or type genuinely changed (a re-encoding).",
+    "Update an item's hook and/or deadline in place — a light touch that does NOT reset the decay clock or create a new version. Use this to set the engagement hook or adjust a deadline. Reach for stream_restream instead only when the item's content or type genuinely changed (a re-encoding).",
     {
       id: z
         .union([z.number().int(), z.string()])
