@@ -28,16 +28,16 @@ Always use these tools — never reason about the state of the stream from memor
 
 ## Motion-states (the four types) and decay periods
 
-Type doesn't classify what an item is *about* — it classifies how the item **moves through attention**. There are four motion-states. Two are perches you can stand on; two are flights (movement *toward* something). Each maps to a Todoist priority flag and has its own decay window.
+Type doesn't classify what an item is *about* — it classifies what your attention is **doing** with it. William James saw thought as "flights and perchings": attention lands and rests on a **perch** (a stable thing you can point at — a conclusion, a definite item), then moves between landings in a **flight** (the pull, the transition — real mental activity, but hard to point at because it's a motion, not a thing). Cross perch-vs-flight with directed-vs-free and you get four motion-states. Each maps to a Todoist priority flag and has its own decay window.
 
 | Type | Flag | In a word | Decay | What it is / defining test |
 |------|------|-----------|-------|----------------------------|
-| `live` | P1 | doing | 7 days | A foot is already down — in-hand, being done. *"Would I act on it today?"* It's engagement, not intention. |
-| `pull` | P2 | wanting | 4 days | Felt momentum *toward* it, but no foot down — you keep circling it. *"I keep thinking about it but haven't started."* Shortest window by design: a pull should resolve or reveal fast. |
-| `gate` | P3 | deciding | 14 days | The work *is* a decision, and it isn't made. *"I can state it but not the next action — because the next action is the choice."* Longest window: decisions need to ripen. |
-| `drift` | P4 | wondering | 5 days | Free exploration, no obligation — novelty for its own sake (seeds, what-ifs, interesting links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
+| `live` | P1 | doing | 7 days | **Directed perch** — a foot is already down, you're working on it *now* (not planning to, *are*). *"Would I act on it today?"* Engagement, not intention. |
+| `pull` | P2 | avoiding | 4 days | **Directed flight** — a known action you keep *not* starting. You know exactly what doing it looks like; the circling *is* the pull. *"I keep thinking about it but haven't started."* Shortest window by design: a pull should resolve or reveal fast. |
+| `muse` | P3 | returning | 21 days | **Free perch** — no action exists, but you keep coming back to reread and sit with it because it keeps giving. *"There's nothing to *do* — I revisit it to chew on it."* Longest window: it's allowed to persist. |
+| `drift` | P4 | wondering | 5 days | **Free flight** — interesting, but ask "so what would you *do*?" and you'd shrug. Novelty for its own sake (seeds, what-ifs, saved links). **Fading is success** — what matters resurfaces on its own; the rest is meant to fade, no guilt. |
 
-When unsure, default to `live`. If an item keeps coming back unstarted, it's probably a `pull`; if what's blocking it is a choice rather than the doing, it's a `gate`.
+Two questions sort anything: **(1) Is there a concrete action?** No → `drift` or `muse`. Yes → `live` or `pull`. Then **(2)** if no action, new-and-sparkly = `drift` / something you keep returning to = `muse`; if action, in motion = `live` / circling it = `pull`. When unsure, default to `live`.
 
 ## Recurrence — when something keeps coming back
 
@@ -45,12 +45,12 @@ Items decay and fade. When a faded thing comes back, **restream the existing ite
 
 The repeating item isn't a failure; it's the loudest, most informative signal in the stream. It means the block was never the doing.
 
-- **Auto-routing to `gate`.** Once an item has recurred enough (↻3), the system reclassifies it to `gate` on restream — it stops asking you to *do* it and starts asking you to *decide* it. `stream_restream` reports this ("now gate"); surface the shift.
-- **Reframe on resurface — never repeat verbatim.** Reword by how many times it's come back:
+- **Reframe on resurface — never repeat verbatim.** The system surfaces the count but never reclassifies the item for you — that's your job. Reword by how many times it's come back:
   - 1st: the thing itself.
   - ~3rd (↻3): "what decision is actually under this?" — name the real block (decide, delegate, or drop).
   - ~5th (↻5): "is this still a yes? saying no is a clean resolve."
 - **Dropping is a first-class win.** Deciding *not* to do something and resolving it is a clean leave, not a failure — especially for a high-recurrence ghost. Offer it openly.
+- **Watch for pull → muse.** A `pull` you keep circling but never act on may really be a `muse` — something you return to sit with, not something to do. If the action never lands, consider restreaming it to `muse` instead of pushing it.
 
 Surface the count when you show these items ("you've circled this 3×").
 
@@ -78,7 +78,7 @@ Do not batch. Do not defer. Do not maintain your own tracking tables or summarie
   - The user shares a progress update or new context about an existing item.
   - An item's scope, framing, or understanding has changed through conversation.
   - A pull has crystallized into something you're now actually doing (pull → live).
-  - An item's motion-state should change (e.g., a gate whose decision is now made becomes a live; a pull you keep circling becomes a gate once you see the block is a choice).
+  - An item's motion-state should change (e.g., a pull you've stopped acting on but keep returning to becomes a muse; a muse you've finally found an action for becomes a pull or live).
   - New details, links, or references are mentioned that belong on an existing item.
 - **Add by default** when the user mentions something new. Don't ask "want me to add this?" — just add it.
 
@@ -102,14 +102,14 @@ The first line is what you'd put on a sticky note — short, scannable, says wha
 
 Use this format when it's genuinely useful — don't pad short items with empty detail sections, and don't bury the summary inside a long paragraph. Single-line content is fine for items that fit on one line.
 
-This applies to all four motion-states — live, pull, gate, and drift alike.
+This applies to all four motion-states — live, pull, muse, and drift alike.
 
 ## Common operations
 
 ### Adding an item
 
 1. Parse the user's input for:
-   - **type** — the motion-state: `live`, `pull`, `gate`, or `drift` (default to `live` if not clear). Classify by how it moves, not what it's about: being done → `live`; circled but unstarted → `pull`; blocked on a decision → `gate`; idle wondering → `drift`.
+   - **type** — the motion-state: `live`, `pull`, `muse`, or `drift` (default to `live` if not clear). Classify by what your attention is *doing*, not what it's about: working on it → `live`; a known action you keep avoiding → `pull`; no action but you keep returning to it → `muse`; idle wondering → `drift`.
    - **content** — what the item is. Follow the "Writing content" guidance above — use summary + details when there's enough substance to warrant it.
    - **startDate** — `YYYY-MM-DD`, defaults to today unless they specify a future start.
    - **deadline** — `YYYY-MM-DD` only if there's a hard external deadline.
@@ -118,9 +118,9 @@ This applies to all four motion-states — live, pull, gate, and drift alike.
 4. Confirm what was added in a brief, conversational way.
 
 Example parsings (note how type follows the *motion*, not the subject):
-- "review the Q1 budget proposal, deadline March 5" → type=live, content="Review the Q1 budget proposal", deadline=2026-03-05 (a concrete thing to do)
-- "I keep meaning to build a CLI tool for the stream" → type=pull, content="Build a CLI tool for stream management" (momentum toward, not started)
-- "should we switch insurers or not?" → type=gate, content="Decide whether to switch insurers" (the work is the decision)
+- "review the Q1 budget proposal, deadline March 5" → type=live, content="Review the Q1 budget proposal", deadline=2026-03-05 (you're working on it)
+- "I keep meaning to message Saeed about the collab" → type=pull, content="Message Saeed about the collab" (the action is obvious — send the message — you just keep not)
+- "I keep coming back to that idea that trajectory is field-determined" → type=muse, content="Trajectory is field-determined" (nothing to *do* with it; you revisit it because it keeps giving)
 - "finish the API docs by Friday" → type=live, content="Finish the API docs", deadline=(next Friday)
 - "random thought: what if the stream had a heat-based decay someday" → type=drift, content="What if the stream had heat-based decay" (idle wondering, no obligation)
 - "a CLI for the stream so I can add things without opening Claude. Probably Rust. Could lift the existing TypeScript types via JSON schema." → type=pull, content="CLI for the stream so I can add items without opening Claude\n\nProbably Rust. Could lift the existing TypeScript types via JSON schema."
@@ -141,13 +141,13 @@ Example parsings (note how type follows the *motion*, not the subject):
    - If it's text, `stream_query` to find matches; same disambiguation rules as resolve.
 2. Determine what changed: new content, new type, new deadline, new startDate. If the user didn't say what changed, ask.
 3. Call `stream_restream` with the ID and only the changed fields. Unspecified fields carry over from the original.
-4. Confirm conversationally: old ID → new ID, what changed. If the tool reports a recurrence bump (↻N) or "now gate", surface it and reframe toward the decision (see Recurrence above) — don't just re-state the task.
+4. Confirm conversationally: old ID → new ID, what changed. If the tool reports a recurrence bump (↻N), surface it and reframe (see Recurrence above) — don't just re-state the task; name the decision under it or offer the drop.
 
 ### Showing the stream
 
 Pick the view that matches the user's question:
 
-- **Full picture** — `stream_query` with no filters. Group by motion-state (live, pull, gate, drift). For each item show content, ID, and decay progress (e.g., "day 3 of 7"). If deadlines exist, show days remaining. Call out anything recurring (↻N) — "circled 3×" — it's the most informative thing in the stream. If the stream is empty, say so warmly.
+- **Full picture** — `stream_query` with no filters. Group by motion-state (live, pull, muse, drift). For each item show content, ID, and decay progress (e.g., "day 3 of 7"). If deadlines exist, show days remaining. Call out anything recurring (↻N) — "circled 3×" — it's the most informative thing in the stream. If the stream is empty, say so warmly.
 - **Attention** (decayed and deadline-urgent) — call `stream_query` twice:
   - With `decay_min: 1.0` → items past their natural lifetime.
   - With `deadline_within: 2` → items with deadlines within 2 days.

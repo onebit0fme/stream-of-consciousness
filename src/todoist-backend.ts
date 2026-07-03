@@ -15,13 +15,12 @@ import {
   computeShortIds,
   resolveShortId,
   nextRecurrence,
-  restreamType,
 } from "./utils.js";
 
 // --- Priority Mapping ---
 // Todoist API: priority 4 = P1/urgent/red, 1 = P4/normal.
 // Derived from ITEM_TYPES' P1→P4 order so a rename/reorder has a single source
-// of truth: live=P1(4), pull=P2(3), gate=P3(2), drift=P4(1).
+// of truth: live=P1(4), pull=P2(3), muse=P3(2), drift=P4(1).
 const TYPE_TO_PRIORITY = Object.fromEntries(
   ITEM_TYPES.map((t, i) => [t, ITEM_TYPES.length - i]),
 ) as Record<ItemType, number>;
@@ -228,12 +227,11 @@ export class TodoistBackend implements StreamBackend {
     const { task: oldTask, allIds } = await this.findTaskWithContext(strId);
     if (!oldTask) return null;
 
-    const oldType = PRIORITY_TO_TYPE[oldTask.priority] ?? "live";
     const today = todayStr();
 
-    // Recurrence climbs only if the old copy had already decayed (a returning ghost);
-    // a sufficiently-recurred ghost auto-routes to `gate`. Display ID is filled in
-    // once it's computed against the old+new union below.
+    // Recurrence climbs only if the old copy had already decayed (a returning
+    // ghost). Display ID is filled in once it's computed against the old+new
+    // union below.
     const oldItem = taskToStreamItem(oldTask, "");
     const recurrence = nextRecurrence(
       oldItem.recurrence,
@@ -243,8 +241,8 @@ export class TodoistBackend implements StreamBackend {
     // Close old task
     await this.api.closeTask(oldTask.id);
 
-    // Create new task
-    const newType = restreamType(changes.type, oldType, recurrence);
+    // Create new task — the caller's explicit type wins, else it keeps the old type.
+    const newType = changes.type ?? oldItem.type;
     const newContent = changes.content ?? oldTask.content;
     const newStartDate = changes.startDate ?? today;
     const newDeadline =

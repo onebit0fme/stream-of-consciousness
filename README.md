@@ -8,14 +8,14 @@ Designed for brains that don't do well with traditional task management.
 
 ## How it works
 
-Everything in the stream has a **type** and a **decay period**. Type is a *motion-state* — it classifies how an item moves through attention (its lifecycle), not what it's about. Two are perches you can stand on; two are flights (movement *toward* something):
+Everything in the stream has a **type** and a **decay period**. Type is a *motion-state* — it classifies what your attention is *doing* with an item, not what it's about. From William James's "flights and perchings": two are **perches** (attention landed and resting) and two are **flights** (the movement between), crossed with directed-vs-free:
 
 | Type | Flag | In a word | Decay | What it is |
 |------|------|-----------|-------|------------|
-| live | P1 | doing | 7 days | A foot is already down — being done. *Would I act on it today?* |
-| pull | P2 | wanting | 4 days | Momentum toward it, no foot down — you keep circling it. Shortest by design: resolve or reveal, fast. |
-| gate | P3 | deciding | 14 days | The work *is* an unmade decision. Longest: decisions need to ripen. |
-| drift | P4 | wondering | 5 days | Free exploration, no obligation. Fading is the feature — what matters resurfaces on its own. |
+| live | P1 | doing | 7 days | Directed perch — a foot is already down, you're working on it now. *Would I act on it today?* |
+| pull | P2 | avoiding | 4 days | Directed flight — a known action you keep not starting. You know the next step; you just haven't. Shortest by design: resolve or reveal, fast. |
+| muse | P3 | returning | 21 days | Free perch — no action, but you keep coming back to sit with it because it keeps giving. Longest: it's allowed to persist. |
+| drift | P4 | wondering | 5 days | Free flight — interesting with no landing in sight; ask "so what would you do?" and you'd shrug. Fading is the feature — what matters resurfaces on its own. |
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
@@ -102,7 +102,7 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 
 | Stream concept | Todoist field |
 |---------------|---------------|
-| type / motion-state (live/pull/gate/drift) | priority (P1/P2/P3/P4) |
+| type / motion-state (live/pull/muse/drift) | priority (P1/P2/P3/P4) |
 | content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
 | start date | due date (future only) |
 | deadline | deadline |
@@ -111,7 +111,7 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 
 **Date handling:** Items with a future start date get a Todoist due date so they stay out of the stream until that date arrives. Items entering the stream today (or with a past start date) have no due date set — this avoids cluttering Todoist with "overdue" markers. Any existing due dates that have reached today are automatically cleared when the stream is read.
 
-Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original; restreaming an item that had already decayed also bumps its recurrence count (`↻N`), and once it reaches `↻3` the item auto-routes to `gate` — the system stops treating a recurring ghost as something to *do* and starts treating it as something to *decide*.
+Items added directly in Todoist (e.g., from mobile) are automatically picked up. Priority determines the type. Restreaming adds a comment on the new task linking back to the original; restreaming an item that had already decayed also bumps its recurrence count (`↻N`). The count is surfaced but never auto-reclassifies the item — a recurring ghost is the loudest signal in the stream, and it's on you (with the skill's help) to reframe it: decide, delegate, or drop.
 
 ## Skills
 

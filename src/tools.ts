@@ -14,11 +14,11 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .enum(ITEM_TYPES)
         .default("live")
         .describe(
-          "Motion-state — how the item moves through attention: " +
+          "Motion-state — how the item moves through attention (James's flights & perchings): " +
             "live=doing, a foot is already down (would I act on it today?); " +
-            "pull=wanting, you keep circling it with no foot down; " +
-            "gate=deciding, the next action is itself an unmade decision; " +
-            "drift=wondering, free exploration with no obligation (fading is fine). " +
+            "pull=a known action you keep avoiding — the next step is obvious, you just haven't started; " +
+            "muse=no action exists, but you keep returning to sit with it (it keeps giving); " +
+            "drift=wondering, free exploration with no landing in sight (fading is fine). " +
             "Default: live."
         ),
       startDate: z
@@ -98,7 +98,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       type: z
         .array(z.enum(ITEM_TYPES))
         .optional()
-        .describe("Filter by motion-state(s): live, pull, gate, drift"),
+        .describe("Filter by motion-state(s): live, pull, muse, drift"),
       status: z
         .enum(["active", "resolved", "all"])
         .default("active")
