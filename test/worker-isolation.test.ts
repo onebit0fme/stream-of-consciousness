@@ -34,7 +34,7 @@ function recordingFactory(): {
       throw new Error("not exercised");
     },
     resolve: async () => null,
-    restream: async () => null,
+    restream: async () => ({ status: "not_found" as const }),
     query: async () => [],
   };
   const factory: TodoistBackendFactory = (accessToken, projectId) => {

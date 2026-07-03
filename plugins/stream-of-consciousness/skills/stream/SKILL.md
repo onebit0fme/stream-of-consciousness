@@ -124,8 +124,8 @@ Example parsings (note how type follows the *motion*, not the subject):
 1. Find the item:
    - If the input starts with an ID, that's the item.
    - If it's text, `stream_query` to find matches; same disambiguation rules as resolve.
-2. Determine what changed: new content, new type, new deadline, new startDate. If the user didn't say what changed, ask.
-3. Call `stream_restream` with the ID and only the changed fields. Unspecified fields carry over from the original.
+2. Determine what changed: new content, new type, new deadline, new startDate. If the user didn't say what changed, ask. **At least one field must actually change** — a restream that would recreate the item as-is is rejected (the tool replies "nothing changed"). If nothing has genuinely changed, don't restream: leave it, or if it's done, resolve it instead.
+3. Call `stream_restream` with the ID and only the changed fields. Unspecified fields carry over from the original. To **remove** a deadline, pass `deadline: null` (omitting it keeps the existing one).
 4. Confirm conversationally: old ID → new ID, what changed.
 
 ### Showing the stream

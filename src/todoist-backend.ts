@@ -1,6 +1,6 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
 import type { Task } from "@doist/todoist-api-typescript";
-import { StreamBackend } from "./backend.js";
+import { StreamBackend, RestreamResult } from "./backend.js";
 import {
   ITEM_TYPES,
   ItemType,
@@ -13,6 +13,7 @@ import {
   decayProgress,
   computeShortIds,
   resolveShortId,
+  isUnchangedRestream,
 } from "./utils.js";
 
 // --- Priority Mapping ---
@@ -190,15 +191,18 @@ export class TodoistBackend implements StreamBackend {
       startDate?: string;
       deadline?: string | null;
     },
-  ): Promise<{ old: StreamItem; new: StreamItem } | null> {
+  ): Promise<RestreamResult> {
     const strId = String(id);
     const { task: oldTask, allIds } = await this.findTaskWithContext(strId);
-    if (!oldTask) return null;
+    if (!oldTask) return { status: "not_found" };
 
     const today = todayStr();
 
     // Display ID is filled in once it's computed against the old+new union below.
     const oldItem = taskToStreamItem(oldTask, "");
+
+    // Reject a no-op restream before closing anything — it would just churn the item.
+    if (isUnchangedRestream(oldItem, changes)) return { status: "unchanged" };
 
     // Close old task
     await this.api.closeTask(oldTask.id);
@@ -240,7 +244,7 @@ export class TodoistBackend implements StreamBackend {
     const newItem = taskToStreamItem(newTask, newDisplayId);
     newItem.restreamedFrom = oldTask.id;
 
-    return { old: oldItem, new: newItem };
+    return { status: "ok", old: oldItem, new: newItem };
   }
 
   async query(filters: QueryFilters): Promise<StreamItem[]> {

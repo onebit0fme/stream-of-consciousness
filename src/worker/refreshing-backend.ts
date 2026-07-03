@@ -1,4 +1,4 @@
-import type { StreamBackend } from "../backend.js";
+import type { StreamBackend, RestreamResult } from "../backend.js";
 import { TodoistBackend } from "../todoist-backend.js";
 import type { ItemType, StreamItem, QueryFilters } from "../types.js";
 import { refreshTodoistToken, computeTokenExpiry } from "./todoist-oauth.js";
@@ -110,7 +110,7 @@ export class RefreshingTodoistBackend implements StreamBackend {
   async restream(
     id: number | string,
     changes: { content?: string; type?: ItemType; startDate?: string; deadline?: string | null },
-  ): Promise<{ old: StreamItem; new: StreamItem } | null> {
+  ): Promise<RestreamResult> {
     return this.withRetry((b) => b.restream(id, changes));
   }
 

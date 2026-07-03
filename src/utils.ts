@@ -21,6 +21,25 @@ export function decayProgress(item: { startDate: string; type: string }, today: 
   return age / decayDays(item.type);
 }
 
+/**
+ * A restream is unchanged (a no-op) when nothing the caller can set actually
+ * differs from the old item: content, type, deadline, and startDate are each
+ * either omitted or equal to the old value. The automatic startDate refresh to
+ * "today" alone doesn't count — an as-is restream just churns the item, so
+ * callers should resolve it instead.
+ */
+export function isUnchangedRestream(
+  old: { content: string; type: string; deadline: string | null; startDate: string },
+  changes: { content?: string; type?: string; deadline?: string | null; startDate?: string },
+): boolean {
+  return (
+    (changes.content === undefined || changes.content === old.content) &&
+    (changes.type === undefined || changes.type === old.type) &&
+    (changes.deadline === undefined || changes.deadline === old.deadline) &&
+    (changes.startDate === undefined || changes.startDate === old.startDate)
+  );
+}
+
 export function getActiveFileItems(items: FileStreamItem[], today: string): FileStreamItem[] {
   return items.filter(
     (item) => item.resolvedAt === null && item.startDate <= today

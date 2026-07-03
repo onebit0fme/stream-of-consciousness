@@ -177,7 +177,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
 
   server.tool(
     "stream_restream",
-    "Resolve an item and create a new version of it — atomic restream with lineage link",
+    "Resolve an item and create a new version of it — atomic restream with lineage link. Requires at least one changed field (content, type, startDate, or deadline); an unchanged restream is rejected — resolve the item instead.",
     {
       id: z
         .union([z.number().int(), z.string()])
@@ -198,8 +198,9 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       deadline: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullable()
         .optional()
-        .describe("New deadline YYYY-MM-DD (defaults to old item's deadline)"),
+        .describe("New deadline YYYY-MM-DD; pass null to clear an existing deadline; omit to keep the current one"),
     },
     async ({ id, content, type, startDate, deadline }) => {
       const result = await backend.restream(id, {
@@ -209,12 +210,23 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         deadline,
       });
 
-      if (!result) {
+      if (result.status === "not_found") {
         return {
           content: [
             {
               type: "text" as const,
               text: `No active item found with ID ${id}.`,
+            },
+          ],
+        };
+      }
+
+      if (result.status === "unchanged") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Nothing changed, so ${id} was left as-is — a restream needs a new content, type, start date, or deadline. If it's done, resolve it instead.`,
             },
           ],
         };

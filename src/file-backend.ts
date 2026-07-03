@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { StreamBackend } from "./backend.js";
+import { StreamBackend, RestreamResult } from "./backend.js";
 import {
   ItemType,
   StreamItem,
@@ -15,6 +15,7 @@ import {
   decayProgress,
   getActiveFileItems,
   nowIso,
+  isUnchangedRestream,
 } from "./utils.js";
 
 const STREAM_PATH = path.join(os.homedir(), ".stream-of-consciousness");
@@ -94,15 +95,17 @@ export class FileBackend implements StreamBackend {
       startDate?: string;
       deadline?: string | null;
     },
-  ): Promise<{ old: StreamItem; new: StreamItem } | null> {
+  ): Promise<RestreamResult> {
     const numId = typeof id === "string" ? parseInt(id, 10) : id;
-    if (isNaN(numId)) return null;
+    if (isNaN(numId)) return { status: "not_found" };
 
     const data = readStream();
     const oldItem = data.items.find(
       (i) => i.id === numId && i.resolvedAt === null
     );
-    if (!oldItem) return null;
+    if (!oldItem) return { status: "not_found" };
+
+    if (isUnchangedRestream(oldItem, changes)) return { status: "unchanged" };
 
     const today = todayStr();
     oldItem.resolvedAt = nowIso();
@@ -123,7 +126,7 @@ export class FileBackend implements StreamBackend {
     data.nextId++;
     writeStream(data);
 
-    return { old: toStreamItem(oldItem), new: toStreamItem(newItem) };
+    return { status: "ok", old: toStreamItem(oldItem), new: toStreamItem(newItem) };
   }
 
   async query(filters: QueryFilters): Promise<StreamItem[]> {

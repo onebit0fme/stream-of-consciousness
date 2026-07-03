@@ -7,6 +7,7 @@ import {
   decayProgress,
   computeShortIds,
   resolveShortId,
+  isUnchangedRestream,
 } from "../src/utils.js";
 
 describe("daysBetween", () => {
@@ -81,6 +82,49 @@ describe("decayProgress", () => {
   it("uses muse's long window", () => {
     // muse decays in 21 days, so 21 days = 1.0
     assert.equal(decayProgress({ startDate: "2025-01-01", type: "muse" }, "2025-01-22"), 1.0);
+  });
+});
+
+describe("isUnchangedRestream", () => {
+  const old = {
+    content: "Message Saeed",
+    type: "pull",
+    deadline: null as string | null,
+    startDate: "2025-01-01",
+  };
+
+  it("is unchanged when no fields are provided", () => {
+    assert.equal(isUnchangedRestream(old, {}), true);
+  });
+
+  it("is unchanged when provided fields equal the old values", () => {
+    assert.equal(isUnchangedRestream(old, { content: "Message Saeed", type: "pull" }), true);
+  });
+
+  it("ignores the default startDate refresh (not a change on its own)", () => {
+    // startDate omitted → backend defaults it to today; that alone is a no-op
+    assert.equal(isUnchangedRestream(old, { content: "Message Saeed" }), true);
+  });
+
+  it("detects a content change", () => {
+    assert.equal(isUnchangedRestream(old, { content: "Message Saeed about the collab" }), false);
+  });
+
+  it("detects a type change with the same content", () => {
+    assert.equal(isUnchangedRestream(old, { type: "live" }), false);
+  });
+
+  it("detects setting a deadline", () => {
+    assert.equal(isUnchangedRestream(old, { deadline: "2025-02-01" }), false);
+  });
+
+  it("detects clearing an existing deadline", () => {
+    const withDeadline = { ...old, deadline: "2025-02-01" };
+    assert.equal(isUnchangedRestream(withDeadline, { deadline: null }), false);
+  });
+
+  it("detects an explicit startDate change", () => {
+    assert.equal(isUnchangedRestream(old, { startDate: "2025-06-01" }), false);
   });
 });
 
