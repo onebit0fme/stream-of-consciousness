@@ -1,9 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { StreamBackend, RestreamResult } from "./backend.js";
 import {
-  ItemType,
+  StreamBackend,
+  RestreamResult,
+  UpdateResult,
+  AddParams,
+  RestreamChanges,
+  UpdateChanges,
+} from "./backend.js";
+import {
   StreamItem,
   StreamData,
   FileStreamItem,
@@ -44,17 +50,13 @@ function toStreamItem(item: FileStreamItem): StreamItem {
   return {
     ...item,
     displayId: `#${item.id}`,
+    hook: item.hook ?? null,
     restreamedFrom: item.restreamedFrom ?? null,
   };
 }
 
 export class FileBackend implements StreamBackend {
-  async add(params: {
-    content: string;
-    type: ItemType;
-    startDate: string;
-    deadline: string | null;
-  }): Promise<StreamItem> {
+  async add(params: AddParams): Promise<StreamItem> {
     const data = readStream();
     const today = todayStr();
     const newItem: FileStreamItem = {
@@ -63,6 +65,7 @@ export class FileBackend implements StreamBackend {
       content: params.content,
       startDate: params.startDate || today,
       deadline: params.deadline,
+      hook: params.hook,
       resolvedAt: null,
       createdAt: nowIso(),
     };
@@ -89,12 +92,7 @@ export class FileBackend implements StreamBackend {
 
   async restream(
     id: number | string,
-    changes: {
-      content?: string;
-      type?: ItemType;
-      startDate?: string;
-      deadline?: string | null;
-    },
+    changes: RestreamChanges,
   ): Promise<RestreamResult> {
     const numId = typeof id === "string" ? parseInt(id, 10) : id;
     if (isNaN(numId)) return { status: "not_found" };
@@ -118,6 +116,8 @@ export class FileBackend implements StreamBackend {
       startDate: changes.startDate ?? today,
       deadline:
         changes.deadline !== undefined ? changes.deadline : oldItem.deadline,
+      // Carry the old hook forward unless the caller overrides it (incl. to null).
+      hook: changes.hook !== undefined ? changes.hook : (oldItem.hook ?? null),
       resolvedAt: null,
       createdAt: nowIso(),
       restreamedFrom: numId,
@@ -127,6 +127,27 @@ export class FileBackend implements StreamBackend {
     writeStream(data);
 
     return { status: "ok", old: toStreamItem(oldItem), new: toStreamItem(newItem) };
+  }
+
+  async update(
+    id: number | string,
+    changes: UpdateChanges,
+  ): Promise<UpdateResult> {
+    const numId = typeof id === "string" ? parseInt(id, 10) : id;
+    if (isNaN(numId)) return { status: "not_found" };
+
+    const data = readStream();
+    const item = data.items.find(
+      (i) => i.id === numId && i.resolvedAt === null
+    );
+    if (!item) return { status: "not_found" };
+
+    // A metadata patch: no startDate change, so the decay clock is untouched.
+    if (changes.hook !== undefined) item.hook = changes.hook;
+    if (changes.deadline !== undefined) item.deadline = changes.deadline;
+    writeStream(data);
+
+    return { status: "ok", item: toStreamItem(item) };
   }
 
   async query(filters: QueryFilters): Promise<StreamItem[]> {

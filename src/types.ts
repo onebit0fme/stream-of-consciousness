@@ -23,6 +23,18 @@ export const DECAY: Record<string, number> = {
 export const ITEM_TYPES = ["live", "pull", "muse", "drift"] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
 
+// Hook — the intrinsic engagement signal (Dodson's interest-based nervous
+// system). NOT a per-item label but a four-state read of whether the item has
+// something that can actually get you to engage it:
+//   null (unset) — undecided, not triaged yet
+//   "interest"   — has an in-the-moment hook: interesting / challenging / novel
+//   "passion"    — tied to something deeper and lasting (values, identity)
+//   "none"       — explicitly no hook; at risk (needs one, or should be dropped)
+// Urgency is deliberately absent from this axis — that motivator is carried by
+// deadline + decay, not by the hook.
+export const HOOKS = ["interest", "passion", "none"] as const;
+export type Hook = (typeof HOOKS)[number];
+
 // --- Data Types ---
 
 export interface StreamItem {
@@ -32,6 +44,7 @@ export interface StreamItem {
   content: string;
   startDate: string;
   deadline: string | null;
+  hook: Hook | null;
   resolvedAt: string | null;
   createdAt: string;
   restreamedFrom?: number | string | null;
@@ -50,6 +63,7 @@ export interface FileStreamItem {
   content: string;
   startDate: string;
   deadline: string | null;
+  hook: Hook | null;
   resolvedAt: string | null;
   createdAt: string;
   restreamedFrom?: number | null;

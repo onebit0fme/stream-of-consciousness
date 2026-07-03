@@ -35,6 +35,7 @@ function recordingFactory(): {
     },
     resolve: async () => null,
     restream: async () => ({ status: "not_found" as const }),
+    update: async () => ({ status: "not_found" as const }),
     query: async () => [],
   };
   const factory: TodoistBackendFactory = (accessToken, projectId) => {

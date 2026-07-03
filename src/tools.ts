@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { StreamBackend } from "./backend.js";
 import { todayStr, daysBetween, decayDays, decayProgress } from "./utils.js";
-import { ITEM_TYPES } from "./types.js";
+import { ITEM_TYPES, HOOKS } from "./types.js";
 
 export function registerTools(server: McpServer, backend: StreamBackend): void {
   server.tool(
@@ -31,14 +31,25 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .regex(/^\d{4}-\d{2}-\d{2}$/)
         .optional()
         .describe("Hard deadline YYYY-MM-DD (optional)"),
+      hook: z
+        .enum(HOOKS)
+        .nullable()
+        .optional()
+        .describe(
+          "Engagement hook — the intrinsic motivation that makes the item doable. " +
+            "Usually left unset: interest=a live, in-the-moment hook (interesting/challenging/novel now); " +
+            "passion=tied to something deeper and lasting (values, identity); " +
+            "none=explicitly no hook (at risk — needs one or should be dropped)."
+        ),
     },
-    async ({ content, type, startDate, deadline }) => {
+    async ({ content, type, startDate, deadline, hook }) => {
       const today = todayStr();
       const item = await backend.add({
         content,
         type,
         startDate: startDate ?? today,
         deadline: deadline ?? null,
+        hook: hook ?? null,
       });
 
       let text = `Added ${item.type} ${item.displayId}: "${item.content}"`;
@@ -47,6 +58,9 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       }
       if (item.startDate !== today) {
         text += ` (starts: ${item.startDate})`;
+      }
+      if (item.hook) {
+        text += ` (hook: ${item.hook})`;
       }
       return { content: [{ type: "text" as const, text }] };
     }
@@ -157,6 +171,10 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
           line += `, deadline: ${item.deadline} (${daysLeft} day${daysLeft !== 1 ? "s" : ""} ${daysLeft >= 0 ? "left" : "ago"})`;
         }
 
+        if (item.hook) {
+          line += `, hook: ${item.hook}`;
+        }
+
         if (item.restreamedFrom) {
           line += `, restreamed from ${item.restreamedFrom}`;
         }
@@ -201,13 +219,21 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .nullable()
         .optional()
         .describe("New deadline YYYY-MM-DD; pass null to clear an existing deadline; omit to keep the current one"),
+      hook: z
+        .enum(HOOKS)
+        .nullable()
+        .optional()
+        .describe(
+          "New engagement hook (defaults to the old item's hook). Note: changing only the hook does NOT justify a restream — use stream_update for that, so decay isn't reset."
+        ),
     },
-    async ({ id, content, type, startDate, deadline }) => {
+    async ({ id, content, type, startDate, deadline, hook }) => {
       const result = await backend.restream(id, {
         content,
         type,
         startDate,
         deadline,
+        hook,
       });
 
       if (result.status === "not_found") {
@@ -237,6 +263,69 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
 
       return {
         content: [{ type: "text" as const, text }],
+      };
+    }
+  );
+
+  server.tool(
+    "stream_update",
+    "Update an item's hook and/or deadline in place — a light touch that does NOT reset the decay clock or create lineage. Use this to set the engagement hook or adjust a deadline. Reach for stream_restream instead only when the item's content or type genuinely changed (a re-encoding).",
+    {
+      id: z
+        .union([z.number().int(), z.string()])
+        .describe("ID of the active item to update"),
+      hook: z
+        .enum(HOOKS)
+        .nullable()
+        .optional()
+        .describe(
+          "Engagement hook: interest (a live, in-the-moment hook), passion (tied to something deeper/lasting), none (explicitly no hook — at risk). Pass null to clear back to unknown; omit to leave unchanged."
+        ),
+      deadline: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullable()
+        .optional()
+        .describe("New deadline YYYY-MM-DD; pass null to clear; omit to leave unchanged."),
+    },
+    async ({ id, hook, deadline }) => {
+      if (hook === undefined && deadline === undefined) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Nothing to update — pass a hook and/or a deadline.",
+            },
+          ],
+        };
+      }
+
+      const result = await backend.update(id, { hook, deadline });
+
+      if (result.status === "not_found") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No active item found with ID ${id}.`,
+            },
+          ],
+        };
+      }
+
+      const item = result.item;
+      const parts: string[] = [];
+      if (hook !== undefined) parts.push(`hook ${item.hook ?? "unset"}`);
+      if (deadline !== undefined)
+        parts.push(item.deadline ? `deadline ${item.deadline}` : "deadline cleared");
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Updated ${item.displayId}: ${parts.join(", ")} (decay untouched).`,
+          },
+        ],
       };
     }
   );

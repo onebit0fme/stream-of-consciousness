@@ -21,6 +21,19 @@ Everything in the stream has a **type** and a **decay period**. Type is a *motio
 
 Items don't get "done" — they **leave the stream** (resolved) or get **restreamed** (redefined). Decay forces regular triage without guilt. If something decays and you don't care, it was never important. If you do care, restream it.
 
+### The hook — an engagement signal
+
+Separately from its type, an item can carry a **hook**: a four-state read of *what could actually get you to engage it* (grounded in Dr. William Dodson's interest-based nervous system). It's a signal, not a per-item chore — most items leave it unset.
+
+| Hook | Meaning |
+|------|---------|
+| *(unset)* | Undecided — not triaged |
+| interest | Has an in-the-moment hook: interesting, challenging, or novel now |
+| passion | Tied to something deeper and lasting — where durable energy lives |
+| none | Explicitly no hook — at risk; needs one or should be dropped |
+
+Setting a hook — or adjusting a deadline — is a lightweight update that does **not** reset the item's decay clock. Urgency isn't a hook; it's carried by the deadline and decay.
+
 ## Quickstart — pick your path
 
 | Path | Best for | Where it runs | Where your data lives | Setup |
@@ -105,6 +118,7 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 | Stream concept | Todoist field |
 |---------------|---------------|
 | type / motion-state (live/pull/muse/drift) | section: `Live` / `Pull` / `Muse` — `drift` has no section (sections auto-created on demand) |
+| hook (engagement signal) | priority: unset → p4 (default) · interest → p3 · passion → p2 · none → p1 |
 | content | content + description (auto-split at first newline; 500-char title limit handled with a sentinel) |
 | comments | folded into content (oldest first); carried into the body on restream |
 | start date | due date (future only) |
@@ -113,7 +127,7 @@ When a project ID is set (Path B env var, or Path C picker), the stream is bound
 
 **Date handling:** Items with a future start date get a Todoist due date so they stay out of the stream until that date arrives. Items entering the stream today (or with a past start date) have no due date set — this avoids cluttering Todoist with "overdue" markers. Any existing due dates that have reached today are automatically cleared when the stream is read.
 
-Items added directly in Todoist (e.g., from mobile) are automatically picked up. The task's **section** determines its type (`Live`/`Pull`/`Muse`; no section = `drift`), so the priority flag is left entirely free for your own use. **Comments** on a task (e.g. notes jotted from mobile) are folded into its content, oldest first, and become part of the item's body when it's restreamed. Restreaming adds a comment on the new task linking back to the original.
+Items added directly in Todoist (e.g., from mobile) are automatically picked up. The task's **section** determines its type (`Live`/`Pull`/`Muse`; no section = `drift`), and its **priority** flag carries the engagement hook (p4/default = unset, p3 = interest, p2 = passion, p1 = none). **Comments** on a task (e.g. notes jotted from mobile) are folded into its content, oldest first, and become part of the item's body when it's restreamed. Restreaming adds a comment on the new task linking back to the original.
 
 ## Skills
 
@@ -131,10 +145,11 @@ The server exposes four tools — same surface on every path:
 
 | Tool | Description |
 |------|-------------|
-| `stream_add` | Add a new item (content, type, startDate, deadline) |
+| `stream_add` | Add a new item (content, type, startDate, deadline, hook) |
 | `stream_resolve` | Resolve an item by ID |
 | `stream_query` | Query items with filters (text search, type, status, decay range, deadline proximity) |
 | `stream_restream` | Resolve an item and create a new version with lineage tracking |
+| `stream_update` | Set an item's hook and/or deadline in place — no decay reset, no lineage |
 
 ## Development
 

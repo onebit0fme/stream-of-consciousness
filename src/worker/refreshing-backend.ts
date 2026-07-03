@@ -1,6 +1,13 @@
-import type { StreamBackend, RestreamResult } from "../backend.js";
+import type {
+  StreamBackend,
+  RestreamResult,
+  UpdateResult,
+  AddParams,
+  RestreamChanges,
+  UpdateChanges,
+} from "../backend.js";
 import { TodoistBackend } from "../todoist-backend.js";
-import type { ItemType, StreamItem, QueryFilters } from "../types.js";
+import type { StreamItem, QueryFilters } from "../types.js";
 import { refreshTodoistToken, computeTokenExpiry } from "./todoist-oauth.js";
 import { readCredentials, patchCredentials, type StoredTodoistCredentials } from "./token-store.js";
 import type { Env } from "./types.js";
@@ -94,12 +101,7 @@ export class RefreshingTodoistBackend implements StreamBackend {
     }
   }
 
-  async add(params: {
-    content: string;
-    type: ItemType;
-    startDate: string;
-    deadline: string | null;
-  }): Promise<StreamItem> {
+  async add(params: AddParams): Promise<StreamItem> {
     return this.withRetry((b) => b.add(params));
   }
 
@@ -109,9 +111,16 @@ export class RefreshingTodoistBackend implements StreamBackend {
 
   async restream(
     id: number | string,
-    changes: { content?: string; type?: ItemType; startDate?: string; deadline?: string | null },
+    changes: RestreamChanges,
   ): Promise<RestreamResult> {
     return this.withRetry((b) => b.restream(id, changes));
+  }
+
+  async update(
+    id: number | string,
+    changes: UpdateChanges,
+  ): Promise<UpdateResult> {
+    return this.withRetry((b) => b.update(id, changes));
   }
 
   async query(filters: QueryFilters): Promise<StreamItem[]> {

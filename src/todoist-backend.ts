@@ -1,8 +1,16 @@
 import { TodoistApi } from "@doist/todoist-api-typescript";
 import type { Task, Section, Comment } from "@doist/todoist-api-typescript";
-import { StreamBackend, RestreamResult } from "./backend.js";
+import {
+  StreamBackend,
+  RestreamResult,
+  UpdateResult,
+  AddParams,
+  RestreamChanges,
+  UpdateChanges,
+} from "./backend.js";
 import {
   ItemType,
+  Hook,
   StreamItem,
   QueryFilters,
 } from "./types.js";
@@ -48,6 +56,40 @@ function buildSectionTypes(sections: Section[]): Map<string, ItemType> {
 function typeForTask(task: Task, sectionTypes: Map<string, ItemType>): ItemType {
   if (!task.sectionId) return "drift";
   return sectionTypes.get(task.sectionId) ?? "drift";
+}
+
+// --- Hook mapping ---
+// The engagement hook (Dodson's interest-based nervous system) is carried by the
+// task's Todoist priority — otherwise unused by the stream. Priority is a 1–4
+// integer where 4 is p1 (urgent/loudest) and 1 is p4 (the default):
+//   unset (null) → 1 (p4, default)   interest → 2 (p3)
+//   passion      → 3 (p2)            none     → 4 (p1) — at-risk items shout
+const HOOK_TO_PRIORITY: Record<Hook, number> = {
+  interest: 2,
+  passion: 3,
+  none: 4,
+};
+// Derived inverse of HOOK_TO_PRIORITY (cf. SECTION_NAME_TO_TYPE above). Priority
+// 1 (p4, default) has no entry, so hookForPriority falls it through to null (unset).
+const PRIORITY_TO_HOOK: Record<number, Hook> = Object.fromEntries(
+  Object.entries(HOOK_TO_PRIORITY).map(
+    ([hook, priority]): [number, Hook] => [priority, hook as Hook],
+  ),
+);
+
+/** Todoist priority (1–4) for a hook; unset maps to the default priority 1. */
+export function priorityForHook(hook: Hook | null): number {
+  return hook === null ? 1 : HOOK_TO_PRIORITY[hook];
+}
+
+/** The hook a Todoist priority encodes (default priority 1 → unset/null). */
+export function hookForPriority(priority: number): Hook | null {
+  return PRIORITY_TO_HOOK[priority] ?? null;
+}
+
+/** A task's engagement hook, read from its priority flag. */
+function hookForTask(task: Task): Hook | null {
+  return hookForPriority(task.priority);
 }
 
 // --- Content split/merge for Todoist's 500-char title limit ---
@@ -139,6 +181,7 @@ function taskToStreamItem(
     content: foldComments(mergeContent(task.content, task.description), comments),
     startDate: taskStartDate(task),
     deadline: task.deadline?.date ?? null,
+    hook: hookForTask(task),
     resolvedAt: task.completedAt ?? null,
     createdAt: task.addedAt ?? new Date().toISOString(),
   };
@@ -223,12 +266,7 @@ export class TodoistBackend implements StreamBackend {
     this.projectId = projectId;
   }
 
-  async add(params: {
-    content: string;
-    type: ItemType;
-    startDate: string;
-    deadline: string | null;
-  }): Promise<StreamItem> {
+  async add(params: AddParams): Promise<StreamItem> {
     const sectionId = await this.resolveSectionId(params.type);
     const task = await this.createTask(params, sectionId);
 
@@ -258,12 +296,7 @@ export class TodoistBackend implements StreamBackend {
 
   async restream(
     id: number | string,
-    changes: {
-      content?: string;
-      type?: ItemType;
-      startDate?: string;
-      deadline?: string | null;
-    },
+    changes: RestreamChanges,
   ): Promise<RestreamResult> {
     const strId = String(id);
     const [{ task: oldTask, allIds }, sections] = await Promise.all([
@@ -304,6 +337,8 @@ export class TodoistBackend implements StreamBackend {
       changes.deadline !== undefined
         ? changes.deadline
         : oldTask.deadline?.date ?? null;
+    // Carry the old hook forward unless the caller overrides it (incl. to null).
+    const newHook = changes.hook !== undefined ? changes.hook : oldItem.hook;
 
     const newSectionId = await this.resolveSectionId(newType, sections);
     const newTask = await this.createTask(
@@ -311,6 +346,7 @@ export class TodoistBackend implements StreamBackend {
         content: newContent,
         startDate: newStartDate,
         deadline: newDeadline,
+        hook: newHook,
       },
       newSectionId,
     );
@@ -337,6 +373,36 @@ export class TodoistBackend implements StreamBackend {
     newItem.restreamedFrom = oldTask.id;
 
     return { status: "ok", old: oldItem, new: newItem };
+  }
+
+  async update(
+    id: number | string,
+    changes: UpdateChanges,
+  ): Promise<UpdateResult> {
+    const strId = String(id);
+    const [{ task, shortIds }, sectionTypes] = await Promise.all([
+      this.findTaskWithContext(strId),
+      this.fetchSectionTypes(),
+    ]);
+    if (!task) return { status: "not_found" };
+
+    // Hook rides the priority flag; deadline maps straight through (null clears).
+    // No due-date/startDate touch — the decay clock is left alone.
+    const updateArgs: Record<string, unknown> = {};
+    if (changes.hook !== undefined) updateArgs.priority = priorityForHook(changes.hook);
+    if (changes.deadline !== undefined) updateArgs.deadlineDate = changes.deadline;
+    if (Object.keys(updateArgs).length > 0) {
+      await this.api.updateTask(
+        task.id,
+        updateArgs as Parameters<typeof this.api.updateTask>[1],
+      );
+    }
+
+    const displayId = shortIds.get(task.id) ?? task.id.slice(-4);
+    const item = taskToStreamItem(task, displayId, typeForTask(task, sectionTypes));
+    if (changes.hook !== undefined) item.hook = changes.hook;
+    if (changes.deadline !== undefined) item.deadline = changes.deadline;
+    return { status: "ok", item };
   }
 
   async query(filters: QueryFilters): Promise<StreamItem[]> {
@@ -436,13 +502,14 @@ export class TodoistBackend implements StreamBackend {
    * future start dates; items entering the stream today need none.
    */
   private async createTask(
-    params: { content: string; startDate: string; deadline: string | null },
+    params: { content: string; startDate: string; deadline: string | null; hook: Hook | null },
     sectionId: string | null,
   ): Promise<Task> {
     const isFuture = params.startDate > todayStr();
     const { content, description } = splitContent(params.content);
     return this.api.addTask({
       content,
+      priority: priorityForHook(params.hook),
       ...(description ? { description } : {}),
       ...(sectionId ? { sectionId } : {}),
       ...(isFuture ? { dueDate: params.startDate } : {}),

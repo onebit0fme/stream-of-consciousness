@@ -27,6 +27,10 @@ export function decayProgress(item: { startDate: string; type: string }, today: 
  * either omitted or equal to the old value. The automatic startDate refresh to
  * "today" alone doesn't count — an as-is restream just churns the item, so
  * callers should resolve it instead.
+ *
+ * Hook is deliberately NOT part of this guard: changing only the hook is not a
+ * re-encoding, so it must go through `stream_update` (which leaves the decay
+ * clock untouched), never a restream.
  */
 export function isUnchangedRestream(
   old: { content: string; type: string; deadline: string | null; startDate: string },
