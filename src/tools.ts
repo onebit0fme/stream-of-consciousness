@@ -36,10 +36,11 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .nullable()
         .optional()
         .describe(
-          "Engagement hook — the intrinsic motivation that makes the item doable. " +
-            "Usually left unset: interest=a live, in-the-moment hook (interesting/challenging/novel now); " +
+          "Engagement hook — the intrinsic motivation that makes the item doable; " +
+            "usually left unset. " +
+            "interest=a live, in-the-moment hook (interesting/challenging/novel now); " +
             "passion=tied to something deeper and lasting (values, identity); " +
-            "none=explicitly no hook (at risk — needs one or should be dropped)."
+            "none=explicitly no hook."
         ),
     },
     async ({ content, type, startDate, deadline, hook }) => {
@@ -275,7 +276,7 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .nullable()
         .optional()
         .describe(
-          "Engagement hook: interest (a live, in-the-moment hook), passion (tied to something deeper/lasting), none (explicitly no hook — at risk). Pass null to clear back to unknown; omit to leave unchanged."
+          "Engagement hook: interest (a live, in-the-moment hook), passion (tied to something deeper/lasting), none (explicitly no hook). Pass null to clear back to unset; omit to leave unchanged."
         ),
       deadline: z
         .string()

@@ -53,7 +53,9 @@ It's a **four-state signal, not a label.** The point is a fast triage read, neve
 | `passion` | Tied to something deeper and lasting — values, identity, a bigger vision | **Where to focus** — the most durable engagement; protect these |
 | `none` | Explicitly no hook | **At risk** — needs a hook, or should be dropped |
 
-`none` is the most useful state: it flags an item that will stall no matter how important it is. `passion` is where the user's real energy lives. Unset just means "not triaged" — don't force a value onto everything.
+`none` is the most useful state: it flags an item that will stall no matter how important it is. `passion` is where the user's real energy lives. Unset just means "not triaged" — don't force a value onto everything. **Unset ≠ `none`:** unset is "haven't looked"; `none` is "looked, found no handle" — opposite ends, never interchangeable. A common trap: reading `hook: none` as "no hook set." It's the reverse — `none` is a *deliberately assigned* value meaning the item was triaged and came up empty; an unset item shows no `hook:` field at all.
+
+The tools report the raw state and nothing more — `stream_query` prints `hook: interest` / `hook: passion` / `hook: none` for set items and omits the field entirely for unset ones. **The interpretation is yours to do:** when scanning a result, pick out the `none` items yourself — those are the at-risk, hook-it-or-drop-it ones — and surface them during triage so the diagnosis doesn't get missed. Don't expect the tool to flag them.
 
 ### Where this comes from (Dr. William Dodson)
 

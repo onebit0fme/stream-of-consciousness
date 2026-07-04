@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-07-04
+
+### Fixed
+
+- **Unset and `none` hooks are no longer conflated.** The skill now spells out
+  that `hook: none` is a *deliberately assigned* value (triaged, came up
+  hookless) and is the opposite of an unset hook (never triaged), which shows no
+  `hook:` field at all — so the two stop being read as the same thing.
+  Interpreting the states (surfacing `none` items as at-risk during triage) is
+  the skill's job.
+
+### Changed
+
+- Hook descriptions in `stream_add` / `stream_update` describe `none` factually
+  ("explicitly no hook") instead of asserting it's "at risk." The tools report
+  the raw hook state; the value judgment lives in the skill, not the tool schema.
+
 ## [2.0.0] - 2026-07-03
 
 This release reworks the core model — the motion-state taxonomy, the Todoist
@@ -116,6 +133,7 @@ Retrospective entry reconstructed from git history.
   exposed over MCP (`stream_add`, `stream_resolve`, `stream_query`,
   `stream_restream`) and packaged as a Claude Code plugin/skill.
 
+[2.0.1]: https://github.com/onebit0fme/stream-of-consciousness/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/onebit0fme/stream-of-consciousness/compare/v1.5.0...v2.0.0
 [1.5.0]: https://github.com/onebit0fme/stream-of-consciousness/compare/v1.0.0...v1.5.0
 [1.0.0]: https://github.com/onebit0fme/stream-of-consciousness/releases/tag/v1.0.0
