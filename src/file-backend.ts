@@ -10,6 +10,9 @@ import {
   UpdateChanges,
 } from "./backend.js";
 import {
+  ItemId,
+  ItemType,
+  Outcome,
   StreamItem,
   StreamData,
   FileStreamItem,
@@ -22,50 +25,83 @@ import {
   getActiveFileItems,
   nowIso,
   isUnchangedRestream,
+  isRestreamed,
+  applyRestream,
 } from "./utils.js";
 
-const STREAM_PATH = path.join(os.homedir(), ".stream-of-consciousness");
+function streamPath(): string {
+  return process.env.STREAM_FILE ?? path.join(os.homedir(), ".stream-of-consciousness");
+}
+
+// Type names a stream file may also carry, and the type each reads as.
+const TYPE_ALIASES: Record<string, ItemType> = { live: "run", pull: "run", muse: "drift" };
+
+/** An item as it may appear in a stream file: any type name, optional fields possibly absent. */
+type StoredItem = Pick<FileStreamItem, "id" | "content" | "startDate" | "createdAt"> &
+  Partial<Pick<FileStreamItem, "deadline" | "history" | "resolvedAt" | "outcome">> & { type: string };
+
+/** A stored item in the current shape: type aliases resolved, absent fields defaulted, unknown ones dropped. */
+export function normalizeFileItem(raw: StoredItem): FileStreamItem {
+  return {
+    id: raw.id,
+    type: TYPE_ALIASES[raw.type] ?? (raw.type as ItemType),
+    content: raw.content,
+    startDate: raw.startDate,
+    deadline: raw.deadline ?? null,
+    history: raw.history ?? [],
+    resolvedAt: raw.resolvedAt ?? null,
+    outcome: raw.outcome ?? (raw.resolvedAt ? "resolved" : null),
+    createdAt: raw.createdAt,
+  };
+}
 
 function readStream(): StreamData {
-  if (!fs.existsSync(STREAM_PATH)) {
+  const file = streamPath();
+  if (!fs.existsSync(file)) {
     const initial: StreamData = { nextId: 1, items: [] };
     writeStream(initial);
     return initial;
   }
-  const raw = fs.readFileSync(STREAM_PATH, "utf-8");
-  return JSON.parse(raw) as StreamData;
+  const raw = JSON.parse(fs.readFileSync(file, "utf-8")) as {
+    nextId: number;
+    items: StoredItem[];
+  };
+  return { nextId: raw.nextId, items: raw.items.map(normalizeFileItem) };
 }
 
 function writeStream(data: StreamData): void {
-  const dir = path.dirname(STREAM_PATH);
+  const file = streamPath();
+  const dir = path.dirname(file);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const tmp = STREAM_PATH + ".tmp";
+  const tmp = file + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n", "utf-8");
-  fs.renameSync(tmp, STREAM_PATH);
+  fs.renameSync(tmp, file);
 }
 
 function toStreamItem(item: FileStreamItem): StreamItem {
-  return {
-    ...item,
-    displayId: `#${item.id}`,
-    hook: item.hook ?? null,
-  };
+  return { ...item, displayId: `#${item.id}` };
+}
+
+/** The active item with this ID, given as a number or in the `#12` display form. */
+function findActive(data: StreamData, id: ItemId): FileStreamItem | undefined {
+  const numId = typeof id === "string" ? parseInt(id.replace(/^#/, ""), 10) : id;
+  return data.items.find((i) => i.id === numId && i.resolvedAt === null);
 }
 
 export class FileBackend implements StreamBackend {
   async add(params: AddParams): Promise<StreamItem> {
     const data = readStream();
-    const today = todayStr();
     const newItem: FileStreamItem = {
       id: data.nextId,
       type: params.type,
       content: params.content,
-      startDate: params.startDate || today,
+      startDate: params.startDate,
       deadline: params.deadline,
-      hook: params.hook,
+      history: [],
       resolvedAt: null,
+      outcome: null,
       createdAt: nowIso(),
     };
     data.items.push(newItem);
@@ -74,75 +110,38 @@ export class FileBackend implements StreamBackend {
     return toStreamItem(newItem);
   }
 
-  async resolve(id: number | string): Promise<StreamItem | null> {
-    const numId = typeof id === "string" ? parseInt(id, 10) : id;
-    if (isNaN(numId)) return null;
-
+  async resolve(id: ItemId, outcome: Outcome): Promise<StreamItem | null> {
     const data = readStream();
-    const item = data.items.find(
-      (i) => i.id === numId && i.resolvedAt === null
-    );
+    const item = findActive(data, id);
     if (!item) return null;
 
     item.resolvedAt = nowIso();
+    item.outcome = outcome;
     writeStream(data);
     return toStreamItem(item);
   }
 
-  async restream(
-    id: number | string,
-    changes: RestreamChanges,
-  ): Promise<RestreamResult> {
-    const numId = typeof id === "string" ? parseInt(id, 10) : id;
-    if (isNaN(numId)) return { status: "not_found" };
-
+  async restream(id: ItemId, changes: RestreamChanges): Promise<RestreamResult> {
     const data = readStream();
-    const oldItem = data.items.find(
-      (i) => i.id === numId && i.resolvedAt === null
-    );
-    if (!oldItem) return { status: "not_found" };
+    const item = findActive(data, id);
+    if (!item) return { status: "not_found" };
 
-    if (isUnchangedRestream(oldItem, changes)) return { status: "unchanged" };
+    if (isUnchangedRestream(item, changes)) return { status: "unchanged" };
 
-    const today = todayStr();
-    oldItem.resolvedAt = nowIso();
-
-    const newItem: FileStreamItem = {
-      id: data.nextId,
-      // The caller's explicit type wins, else it keeps the old type.
-      type: changes.type ?? oldItem.type,
-      content: changes.content ?? oldItem.content,
-      startDate: changes.startDate ?? today,
-      deadline:
-        changes.deadline !== undefined ? changes.deadline : oldItem.deadline,
-      // Carry the old hook forward unless the caller overrides it (incl. to null).
-      hook: changes.hook !== undefined ? changes.hook : (oldItem.hook ?? null),
-      resolvedAt: null,
-      createdAt: nowIso(),
-    };
-    data.items.push(newItem);
-    data.nextId++;
+    const previousType = item.type;
+    Object.assign(item, applyRestream(item, changes, todayStr()));
     writeStream(data);
 
-    return { status: "ok", old: toStreamItem(oldItem), new: toStreamItem(newItem) };
+    return { status: "ok", item: toStreamItem(item), previousType };
   }
 
-  async update(
-    id: number | string,
-    changes: UpdateChanges,
-  ): Promise<UpdateResult> {
-    const numId = typeof id === "string" ? parseInt(id, 10) : id;
-    if (isNaN(numId)) return { status: "not_found" };
-
+  async update(id: ItemId, changes: UpdateChanges): Promise<UpdateResult> {
     const data = readStream();
-    const item = data.items.find(
-      (i) => i.id === numId && i.resolvedAt === null
-    );
+    const item = findActive(data, id);
     if (!item) return { status: "not_found" };
 
     // A metadata patch: no startDate change, so the decay clock is untouched.
-    if (changes.hook !== undefined) item.hook = changes.hook;
-    if (changes.deadline !== undefined) item.deadline = changes.deadline;
+    item.deadline = changes.deadline;
     writeStream(data);
 
     return { status: "ok", item: toStreamItem(item) };
@@ -172,11 +171,15 @@ export class FileBackend implements StreamBackend {
       items = items.filter((i) => filters.type!.includes(i.type));
     }
 
+    if (filters.restreamed !== undefined) {
+      items = items.filter((i) => isRestreamed(i) === filters.restreamed);
+    }
+
     if (filters.decay_min !== undefined) {
       items = items.filter(
         (i) =>
           i.resolvedAt === null &&
-          decayProgress(i, today) >= filters.decay_min!
+          decayProgress(i.startDate, today) >= filters.decay_min!
       );
     }
 
@@ -184,7 +187,7 @@ export class FileBackend implements StreamBackend {
       items = items.filter(
         (i) =>
           i.resolvedAt === null &&
-          decayProgress(i, today) < filters.decay_max!
+          decayProgress(i.startDate, today) < filters.decay_max!
       );
     }
 

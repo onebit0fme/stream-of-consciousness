@@ -4,6 +4,8 @@ import {
   splitContent,
   mergeContent,
   foldComments,
+  splitLog,
+  withLog,
   CONTENT_LIMIT,
   TRUNCATION_SENTINEL,
 } from "../src/todoist-backend.js";
@@ -184,5 +186,35 @@ describe("foldComments", () => {
       foldComments("Base", [{ content: "  padded note  ", postedAt: at(1) }]),
       "Base\n\npadded note"
     );
+  });
+});
+
+describe("restream log", () => {
+  const history = [
+    { date: "2026-09-28", content: "Create Stripe account" },
+    { date: "2026-09-22", content: "Set up billing" },
+  ];
+
+  it("leaves content without history untouched", () => {
+    assert.equal(withLog("Open the Stripe signup", []), "Open the Stripe signup");
+    assert.deepEqual(splitLog("Open the Stripe signup"), {
+      content: "Open the Stripe signup",
+      history: [],
+    });
+  });
+
+  it("round-trips through a task's title and description", () => {
+    for (const content of ["Open the Stripe signup", "Open the Stripe signup\n\nUse the business email."]) {
+      const stored = splitContent(withLog(content, history));
+      assert.deepEqual(splitLog(mergeContent(stored.content, stored.description)), {
+        content,
+        history,
+      });
+    }
+  });
+
+  it("reads only the trailing log lines as history", () => {
+    const text = "Title\n\n↻ 2026-01-01 a line in the body\nmore body\n\n↻ 2026-09-22 Set up billing";
+    assert.deepEqual(splitLog(text).history, [{ date: "2026-09-22", content: "Set up billing" }]);
   });
 });

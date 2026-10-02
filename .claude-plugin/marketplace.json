@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "stream-of-consciousness",
-      "description": "A minimalist productivity system with time-based decay — designed for neurodivergent brains",
+      "description": "A minimalist productivity system with time-based decay \u2014 designed for neurodivergent brains",
       "source": "./plugins/stream-of-consciousness/",
       "author": {
         "name": "Taras Yanchynskyy",
@@ -19,6 +19,23 @@
         "productivity",
         "task-management",
         "mcp",
+        "adhd",
+        "neurodivergent"
+      ]
+    },
+    {
+      "name": "stream-capacities",
+      "description": "The stream in Capacities \u2014 runs, drifts, wishes and obstacles as native object types, driven through the Capacities MCP",
+      "source": "./plugins/stream-capacities/",
+      "author": {
+        "name": "Taras Yanchynskyy",
+        "url": "https://github.com/onebit0fme"
+      },
+      "homepage": "https://github.com/onebit0fme/stream-of-consciousness",
+      "license": "MIT",
+      "tags": [
+        "productivity",
+        "capacities",
         "adhd",
         "neurodivergent"
       ]

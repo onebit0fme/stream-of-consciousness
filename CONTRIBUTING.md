@@ -26,9 +26,11 @@ claude --plugin-dir ./plugins/stream-of-consciousness
 - Update the README if you change user-facing behavior
 - Describe what you changed and why
 
-## Skill
+## Skills
 
-There is one skill file: `plugins/stream-of-consciousness/skills/stream/SKILL.md`. The Claude Code plugin loads it directly; the Cloudflare Worker bundles and serves it at `/skill.md` for Claude.ai connector users. Edit it in one place.
+`plugins/stream-of-consciousness/skills/stream/SKILL.md` is the skill for the file and Todoist backends. The Claude Code plugin loads it directly; the Cloudflare Worker bundles and serves it at `/skill.md` for Claude.ai connector users.
+
+`plugins/stream-capacities/skills/` holds the skills for the Capacities plugin. Plugins install separately, so it can't share files with the one above. The rewrite deck is kept word for word the same in both, and `npm test` fails if the copies drift apart. Change it in both places.
 
 ## Philosophy
 

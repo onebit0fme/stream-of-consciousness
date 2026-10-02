@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import {
   todayStr,
   daysBetween,
-  decayDays,
   decayProgress,
   computeShortIds,
   resolveShortId,
   isUnchangedRestream,
+  lineageLabel,
+  withPastWording,
+  applyRestream,
 } from "../src/utils.js";
 
 describe("daysBetween", () => {
@@ -32,63 +34,24 @@ describe("daysBetween", () => {
   });
 });
 
-describe("decayDays", () => {
-  it("returns 7 for live", () => {
-    assert.equal(decayDays("live"), 7);
-  });
-
-  it("returns 4 for pull", () => {
-    assert.equal(decayDays("pull"), 4);
-  });
-
-  it("returns 21 for muse", () => {
-    assert.equal(decayDays("muse"), 21);
-  });
-
-  it("returns 5 for drift", () => {
-    assert.equal(decayDays("drift"), 5);
-  });
-
-  it("defaults to 7 for unknown type", () => {
-    assert.equal(decayDays("unknown"), 7);
-  });
-});
-
 describe("decayProgress", () => {
   it("returns 0 on start date", () => {
-    assert.equal(decayProgress({ startDate: "2025-01-10", type: "live" }, "2025-01-10"), 0);
+    assert.equal(decayProgress("2025-01-10", "2025-01-10"), 0);
   });
 
-  it("returns 0.5 at half decay", () => {
-    // pull decays in 4 days, so 2 days = 0.5
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "pull" }, "2025-01-03"), 0.5);
-  });
-
-  it("returns 1.0 at full decay", () => {
-    // live decays in 7 days
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "live" }, "2025-01-08"), 1.0);
+  it("returns 1.0 after a week", () => {
+    assert.equal(decayProgress("2025-01-01", "2025-01-08"), 1.0);
   });
 
   it("exceeds 1.0 past decay", () => {
-    // live decays in 7 days, so 14 days = 2.0
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "live" }, "2025-01-15"), 2.0);
-  });
-
-  it("uses type-specific decay period", () => {
-    // pull decays in 4 days, so 4 days = 1.0
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "pull" }, "2025-01-05"), 1.0);
-  });
-
-  it("uses muse's long window", () => {
-    // muse decays in 21 days, so 21 days = 1.0
-    assert.equal(decayProgress({ startDate: "2025-01-01", type: "muse" }, "2025-01-22"), 1.0);
+    assert.equal(decayProgress("2025-01-01", "2025-01-15"), 2.0);
   });
 });
 
 describe("isUnchangedRestream", () => {
   const old = {
     content: "Message Saeed",
-    type: "pull",
+    type: "run",
     deadline: null as string | null,
     startDate: "2025-01-01",
   };
@@ -98,7 +61,7 @@ describe("isUnchangedRestream", () => {
   });
 
   it("is unchanged when provided fields equal the old values", () => {
-    assert.equal(isUnchangedRestream(old, { content: "Message Saeed", type: "pull" }), true);
+    assert.equal(isUnchangedRestream(old, { content: "Message Saeed", type: "run" }), true);
   });
 
   it("ignores the default startDate refresh (not a change on its own)", () => {
@@ -111,7 +74,7 @@ describe("isUnchangedRestream", () => {
   });
 
   it("detects a type change with the same content", () => {
-    assert.equal(isUnchangedRestream(old, { type: "live" }), false);
+    assert.equal(isUnchangedRestream(old, { type: "drift" }), false);
   });
 
   it("detects setting a deadline", () => {
@@ -196,5 +159,66 @@ describe("todayStr", () => {
   it("returns a YYYY-MM-DD formatted string", () => {
     const result = todayStr();
     assert.match(result, /^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("lineageLabel", () => {
+  const past = [{ date: "2025-01-05", content: "Reply to landlord" }];
+
+  it("calls a restreamed run a pull", () => {
+    assert.equal(lineageLabel({ type: "run", history: past }), "pull");
+  });
+
+  it("calls a restreamed drift a muse", () => {
+    assert.equal(lineageLabel({ type: "drift", history: past }), "muse");
+  });
+
+  it("has no name for an item in its first wording", () => {
+    assert.equal(lineageLabel({ type: "run", history: [] }), null);
+  });
+});
+
+describe("withPastWording", () => {
+  it("puts the replaced wording's first line at the head", () => {
+    const history = withPastWording(
+      [{ date: "2025-01-05", content: "Set up billing" }],
+      "Create Stripe account\n\nUse the business email.",
+      "2025-01-12",
+    );
+    assert.deepEqual(history, [
+      { date: "2025-01-12", content: "Create Stripe account" },
+      { date: "2025-01-05", content: "Set up billing" },
+    ]);
+  });
+});
+
+describe("applyRestream", () => {
+  const old = {
+    type: "run" as const,
+    content: "Set up billing\n\nUse the business email.",
+    deadline: "2025-03-01",
+    history: [],
+  };
+
+  it("restarts the clock and logs the replaced wording", () => {
+    assert.deepEqual(applyRestream(old, { content: "Create Stripe account" }, "2025-01-12"), {
+      type: "run",
+      content: "Create Stripe account",
+      deadline: "2025-03-01",
+      startDate: "2025-01-12",
+      history: [{ date: "2025-01-12", content: "Set up billing" }],
+    });
+  });
+
+  it("clears a deadline on null and keeps it when omitted", () => {
+    assert.equal(applyRestream(old, { deadline: null }, "2025-01-12").deadline, null);
+    assert.equal(applyRestream(old, { type: "drift" }, "2025-01-12").deadline, "2025-03-01");
+  });
+
+  it("takes an explicit start date over today", () => {
+    assert.equal(
+      applyRestream(old, { startDate: "2025-02-01" }, "2025-01-12").startDate,
+      "2025-02-01",
+    );
   });
 });
