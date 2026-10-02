@@ -9,8 +9,10 @@ import {
   UpdateChanges,
 } from "./backend.js";
 import {
+  ItemId,
   ItemType,
-  Hook,
+  Outcome,
+  PastWording,
   StreamItem,
   QueryFilters,
 } from "./types.js";
@@ -21,28 +23,25 @@ import {
   computeShortIds,
   resolveShortId,
   isUnchangedRestream,
+  isRestreamed,
+  applyRestream,
 } from "./utils.js";
 
 // --- Section mapping ---
-// Type is carried by the task's Todoist section, which frees the priority flag
-// for the user. Three sections are named verbatim; `drift` lives in no section,
-// so an unsectioned task — or one in any other section — reads as `drift`.
-// Sections are created on demand the first time a type needs one.
-const TYPE_TO_SECTION_NAME: Record<Exclude<ItemType, "drift">, string> = {
-  live: "Live",
-  pull: "Pull",
-  muse: "Muse",
+// Type is the task's Todoist section. A run lives in the `Run` section, created
+// on demand; `drift` lives in no section, so an unsectioned task, or one in any
+// unrecognized section, reads as `drift`.
+const RUN_SECTION = "Run";
+
+// Section names that carry a type when read.
+const SECTION_NAME_TO_TYPE: Record<string, ItemType> = {
+  [RUN_SECTION]: "run",
+  Live: "run",
+  Pull: "run",
+  Muse: "drift",
 };
-const SECTION_NAME_TO_TYPE: Record<string, ItemType> = Object.fromEntries(
-  Object.entries(TYPE_TO_SECTION_NAME).map(([type, name]) => [name, type as ItemType]),
-);
 
-/** The verbatim section name a type lives in, or null for `drift` (no section). */
-function sectionNameForType(type: ItemType): string | null {
-  return type === "drift" ? null : TYPE_TO_SECTION_NAME[type];
-}
-
-/** Build a section-id → motion-state map, keeping only the three named sections. */
+/** Build a section-id → type map, keeping only the sections that name a type. */
 function buildSectionTypes(sections: Section[]): Map<string, ItemType> {
   const map = new Map<string, ItemType>();
   for (const s of sections) {
@@ -52,44 +51,10 @@ function buildSectionTypes(sections: Section[]): Map<string, ItemType> {
   return map;
 }
 
-/** A task's motion-state, from its section (unsectioned/other section → drift). */
+/** A task's type, from its section (unsectioned/other section → drift). */
 function typeForTask(task: Task, sectionTypes: Map<string, ItemType>): ItemType {
   if (!task.sectionId) return "drift";
   return sectionTypes.get(task.sectionId) ?? "drift";
-}
-
-// --- Hook mapping ---
-// The engagement hook (Dodson's interest-based nervous system) is carried by the
-// task's Todoist priority — otherwise unused by the stream. Priority is a 1–4
-// integer where 4 is p1 (urgent/loudest) and 1 is p4 (the default):
-//   unset (null) → 1 (p4, default)   interest → 2 (p3)
-//   passion      → 3 (p2)            none     → 4 (p1) — at-risk items shout
-const HOOK_TO_PRIORITY: Record<Hook, number> = {
-  interest: 2,
-  passion: 3,
-  none: 4,
-};
-// Derived inverse of HOOK_TO_PRIORITY (cf. SECTION_NAME_TO_TYPE above). Priority
-// 1 (p4, default) has no entry, so hookForPriority falls it through to null (unset).
-const PRIORITY_TO_HOOK: Record<number, Hook> = Object.fromEntries(
-  Object.entries(HOOK_TO_PRIORITY).map(
-    ([hook, priority]): [number, Hook] => [priority, hook as Hook],
-  ),
-);
-
-/** Todoist priority (1–4) for a hook; unset maps to the default priority 1. */
-export function priorityForHook(hook: Hook | null): number {
-  return hook === null ? 1 : HOOK_TO_PRIORITY[hook];
-}
-
-/** The hook a Todoist priority encodes (default priority 1 → unset/null). */
-export function hookForPriority(priority: number): Hook | null {
-  return PRIORITY_TO_HOOK[priority] ?? null;
-}
-
-/** A task's engagement hook, read from its priority flag. */
-function hookForTask(task: Task): Hook | null {
-  return hookForPriority(task.priority);
 }
 
 // --- Content split/merge for Todoist's 500-char title limit ---
@@ -107,7 +72,9 @@ export const TRUNCATION_SENTINEL = "→";
 export function splitContent(text: string): { content: string; description: string } {
   const newlineIdx = text.indexOf("\n");
   const title = newlineIdx === -1 ? text : text.slice(0, newlineIdx);
-  const body = newlineIdx === -1 ? "" : text.slice(newlineIdx + 1);
+  // The blank line between summary and details is restored by mergeContent, so
+  // it isn't stored — keeping it would add one more on every round trip.
+  const body = newlineIdx === -1 ? "" : text.slice(newlineIdx + 1).replace(/^\n+/, "");
 
   if (title.length <= CONTENT_LIMIT) {
     return { content: title, description: body };
@@ -133,6 +100,35 @@ export function mergeContent(content: string, description?: string | null): stri
   }
 
   return content + "\n\n" + description;
+}
+
+// --- Restream log ---
+// An item's earlier wordings ride at the end of the task's text, one dated line
+// each, most recent first:
+//   ↻ 2026-09-28 Create Stripe account
+//   ↻ 2026-09-22 Set up billing
+const LOG_MARK = "↻";
+const LOG_LINE = new RegExp(`^${LOG_MARK} (\\d{4}-\\d{2}-\\d{2}) (.*)$`);
+
+/** Append the restream log to an item's content (unchanged when there is no history). */
+export function withLog(content: string, history: PastWording[]): string {
+  if (history.length === 0) return content;
+  const lines = history.map((h) => `${LOG_MARK} ${h.date} ${h.content}`);
+  return `${content}\n\n${lines.join("\n")}`;
+}
+
+/** Separate a task's text into the item's content and the restream log trailing it. */
+export function splitLog(text: string): { content: string; history: PastWording[] } {
+  const lines = text.split("\n");
+  const history: PastWording[] = [];
+  while (lines.length > 0) {
+    const match = LOG_LINE.exec(lines[lines.length - 1]);
+    if (!match) break;
+    history.unshift({ date: match[1], content: match[2] });
+    lines.pop();
+  }
+  if (history.length === 0) return { content: text, history };
+  return { content: lines.join("\n").trimEnd(), history };
 }
 
 // --- Comment folding ---
@@ -171,15 +167,17 @@ function taskToStreamItem(
   type: ItemType,
   comments: Comment[] = [],
 ): StreamItem {
+  const { content, history } = splitLog(mergeContent(task.content, task.description));
   return {
     id: task.id,
     displayId,
     type,
-    content: foldComments(mergeContent(task.content, task.description), comments),
+    content: foldComments(content, comments),
     startDate: taskStartDate(task),
     deadline: task.deadline?.date ?? null,
-    hook: hookForTask(task),
+    history,
     resolvedAt: task.completedAt ?? null,
+    outcome: task.completedAt ? "resolved" : null,
     createdAt: task.addedAt ?? new Date().toISOString(),
   };
 }
@@ -272,7 +270,9 @@ export class TodoistBackend implements StreamBackend {
     return taskToStreamItem(task, task.id.slice(-4), params.type);
   }
 
-  async resolve(id: number | string): Promise<StreamItem | null> {
+  // Todoist has one way for a task to leave — completing it — so the outcome is
+  // reported back to the caller but not stored on the task.
+  async resolve(id: ItemId, outcome: Outcome): Promise<StreamItem | null> {
     const strId = String(id);
     const [{ task, shortIds }, sectionTypes] = await Promise.all([
       this.findTaskWithContext(strId),
@@ -288,11 +288,12 @@ export class TodoistBackend implements StreamBackend {
     ]);
     const item = taskToStreamItem(task, displayId, typeForTask(task, sectionTypes), comments);
     item.resolvedAt = new Date().toISOString();
+    item.outcome = outcome;
     return item;
   }
 
   async restream(
-    id: number | string,
+    id: ItemId,
     changes: RestreamChanges,
   ): Promise<RestreamResult> {
     const strId = String(id);
@@ -302,67 +303,51 @@ export class TodoistBackend implements StreamBackend {
     ]);
     if (!oldTask) return { status: "not_found" };
 
-    const today = todayStr();
     const oldComments = await this.fetchTaskComments(oldTask.id);
     const oldType = typeForTask(oldTask, buildSectionTypes(sections));
 
-    // Display ID is filled in once it's computed against the old+new union below.
-    // Content includes any folded comments, so restream carries them into the
-    // new task's body.
-    const mergedContent = mergeContent(oldTask.content, oldTask.description);
+    // The item's content is the task's full text — title, description and any
+    // comments — so a restream that leaves the content alone still carries all
+    // of it into the new task.
     const oldItem = taskToStreamItem(oldTask, "", oldType, oldComments);
 
-    // Reject a no-op restream before closing anything — but folding pending
-    // comments into the body IS a change (folded content differs from the stored
-    // content), so it's never a no-op.
-    const foldsComments = oldItem.content !== mergedContent;
+    // Folding pending comments into the body is itself a change, so a restream
+    // that does it is never a no-op.
+    const foldsComments = oldComments.some((c) => c.content.trim().length > 0);
     if (!foldsComments && isUnchangedRestream(oldItem, changes)) {
       return { status: "unchanged" };
     }
 
-    // Close old task
+    // A Todoist task's age can't be reset, so the restarted clock is a fresh
+    // task: the old one is closed and its successor carries the log forward.
     await this.api.closeTask(oldTask.id);
 
-    // Create new task — the caller's explicit type wins, else it keeps the old type.
-    const newType = changes.type ?? oldType;
-    // Carry over the FULL old content (oldItem.content is title+description
-    // merged); using oldTask.content — the bare Todoist title — would silently
-    // drop the description on any restream that doesn't change content.
-    const newContent = changes.content ?? oldItem.content;
-    const newStartDate = changes.startDate ?? today;
-    const newDeadline =
-      changes.deadline !== undefined
-        ? changes.deadline
-        : oldTask.deadline?.date ?? null;
-    // Carry the old hook forward unless the caller overrides it (incl. to null).
-    const newHook = changes.hook !== undefined ? changes.hook : oldItem.hook;
-
-    const newSectionId = await this.resolveSectionId(newType, sections);
+    const next = applyRestream(oldItem, changes, todayStr());
+    const sectionId = await this.resolveSectionId(next.type, sections);
     const newTask = await this.createTask(
       {
-        content: newContent,
-        startDate: newStartDate,
-        deadline: newDeadline,
-        hook: newHook,
+        content: withLog(next.content, next.history),
+        startDate: next.startDate,
+        deadline: next.deadline,
       },
-      newSectionId,
+      sectionId,
     );
 
-    // Compute display IDs once over the union (old + new) so both render against the same set.
+    // Short IDs are computed over the old and new task together so both render
+    // against the same set.
     const shortIds = computeShortIds([...allIds, newTask.id]);
-    const oldDisplayId = shortIds.get(oldTask.id) ?? oldTask.id.slice(-4);
-    const newDisplayId = shortIds.get(newTask.id) ?? newTask.id.slice(-4);
+    const displayId = (taskId: string) => shortIds.get(taskId) ?? taskId.slice(-4);
 
-    oldItem.displayId = oldDisplayId;
-    oldItem.resolvedAt = new Date().toISOString();
-
-    const newItem = taskToStreamItem(newTask, newDisplayId, newType);
-
-    return { status: "ok", old: oldItem, new: newItem };
+    return {
+      status: "ok",
+      item: taskToStreamItem(newTask, displayId(newTask.id), next.type),
+      previousType: oldType,
+      replaced: displayId(oldTask.id),
+    };
   }
 
   async update(
-    id: number | string,
+    id: ItemId,
     changes: UpdateChanges,
   ): Promise<UpdateResult> {
     const strId = String(id);
@@ -372,22 +357,15 @@ export class TodoistBackend implements StreamBackend {
     ]);
     if (!task) return { status: "not_found" };
 
-    // Hook rides the priority flag; deadline maps straight through (null clears).
-    // No due-date/startDate touch — the decay clock is left alone.
-    const updateArgs: Record<string, unknown> = {};
-    if (changes.hook !== undefined) updateArgs.priority = priorityForHook(changes.hook);
-    if (changes.deadline !== undefined) updateArgs.deadlineDate = changes.deadline;
-    if (Object.keys(updateArgs).length > 0) {
-      await this.api.updateTask(
-        task.id,
-        updateArgs as Parameters<typeof this.api.updateTask>[1],
-      );
-    }
+    // The deadline maps straight through (null clears). No due-date/startDate
+    // touch — the decay clock is left alone.
+    await this.api.updateTask(task.id, {
+      deadlineDate: changes.deadline,
+    } as Parameters<typeof this.api.updateTask>[1]);
 
     const displayId = shortIds.get(task.id) ?? task.id.slice(-4);
     const item = taskToStreamItem(task, displayId, typeForTask(task, sectionTypes));
-    if (changes.hook !== undefined) item.hook = changes.hook;
-    if (changes.deadline !== undefined) item.deadline = changes.deadline;
+    item.deadline = changes.deadline;
     return { status: "ok", item };
   }
 
@@ -431,25 +409,23 @@ export class TodoistBackend implements StreamBackend {
 
     // Type filter (via section)
     if (filters.type && filters.type.length > 0) {
-      const wanted = new Set(filters.type);
+      const wanted = new Set<ItemType>(filters.type);
       tasks = tasks.filter((t) => wanted.has(typeForTask(t, sectionTypes)));
     }
 
-    // Decay filters (active items only) — a cheap {startDate, type} projection,
-    // not a full item (content/comment reconstruction is unused here).
+    // Decay filters (active items only) — computed from the start date alone,
+    // without building a full item.
     if (filters.decay_min !== undefined) {
       tasks = tasks.filter((t) => {
         if (t.completedAt) return false;
-        const view = { startDate: taskStartDate(t), type: typeForTask(t, sectionTypes) };
-        return decayProgress(view, today) >= filters.decay_min!;
+        return decayProgress(taskStartDate(t), today) >= filters.decay_min!;
       });
     }
 
     if (filters.decay_max !== undefined) {
       tasks = tasks.filter((t) => {
         if (t.completedAt) return false;
-        const view = { startDate: taskStartDate(t), type: typeForTask(t, sectionTypes) };
-        return decayProgress(view, today) < filters.decay_max!;
+        return decayProgress(taskStartDate(t), today) < filters.decay_max!;
       });
     }
 
@@ -469,7 +445,7 @@ export class TodoistBackend implements StreamBackend {
       projectComments ??
       (await this.fetchCommentsByTask([...new Set(tasks.map((t) => t.projectId))]));
 
-    return tasks.map((t) =>
+    const items = tasks.map((t) =>
       taskToStreamItem(
         t,
         shortIds.get(t.id) ?? t.id.slice(0, 4),
@@ -477,25 +453,27 @@ export class TodoistBackend implements StreamBackend {
         commentsByTask.get(t.id) ?? [],
       )
     );
+    return filters.restreamed === undefined
+      ? items
+      : items.filter((i) => isRestreamed(i) === filters.restreamed);
   }
 
   // --- Private helpers ---
 
   /**
    * Build a Todoist task from stream params — the shared create path for `add`
-   * and `restream`. The caller passes the resolved section id (null for `drift`);
-   * type lives in the section, not the priority flag. Only sets a due date for
+   * and `restream`. The caller passes the resolved section id (null for `drift`).
+   * Only sets a due date for
    * future start dates; items entering the stream today need none.
    */
   private async createTask(
-    params: { content: string; startDate: string; deadline: string | null; hook: Hook | null },
+    params: { content: string; startDate: string; deadline: string | null },
     sectionId: string | null,
   ): Promise<Task> {
     const isFuture = params.startDate > todayStr();
     const { content, description } = splitContent(params.content);
     return this.api.addTask({
       content,
-      priority: priorityForHook(params.hook),
       ...(description ? { description } : {}),
       ...(sectionId ? { sectionId } : {}),
       ...(isFuture ? { dueDate: params.startDate } : {}),
@@ -518,7 +496,7 @@ export class TodoistBackend implements StreamBackend {
     });
   }
 
-  /** Section-id → motion-state map for the sections in scope. */
+  /** Section-id → type map for the sections in scope. */
   private async fetchSectionTypes(): Promise<Map<string, ItemType>> {
     return buildSectionTypes(await this.fetchSections());
   }
@@ -532,17 +510,16 @@ export class TodoistBackend implements StreamBackend {
     type: ItemType,
     sections?: Section[],
   ): Promise<string | null> {
-    const name = sectionNameForType(type);
-    if (name === null) return null;
+    if (type === "drift") return null;
 
     const projectId = await this.resolveWriteProjectId();
     const list = sections ?? (await this.fetchSections());
     const existing = list.find(
-      (s) => s.name === name && s.projectId === projectId && !s.isArchived,
+      (s) => s.name === RUN_SECTION && s.projectId === projectId && !s.isArchived,
     );
     if (existing) return existing.id;
 
-    const created = await this.api.addSection({ name, projectId });
+    const created = await this.api.addSection({ name: RUN_SECTION, projectId });
     return created.id;
   }
 

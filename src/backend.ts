@@ -1,19 +1,22 @@
-import { ItemType, Hook, StreamItem, QueryFilters } from "./types.js";
+import { ItemType, ItemId, Outcome, StreamItem, QueryFilters } from "./types.js";
 
 /**
  * Outcome of a restream:
- *  - `ok`        — the old item was resolved and a new version created.
+ *  - `ok`        — the item was re-encoded: `item` is how it reads now, with
+ *                  the old wording at the head of its history. `replaced` is
+ *                  set when the backend had to give it a new ID, and holds the
+ *                  display ID it had before.
  *  - `not_found` — no active item matched the given ID.
- *  - `unchanged` — the restream would have recreated the item as-is (no field
- *                  changed); nothing was resolved. Resolve it instead.
+ *  - `unchanged` — no field would have changed; the item was left alone.
+ *                  Resolve it instead.
  */
 export type RestreamResult =
-  | { status: "ok"; old: StreamItem; new: StreamItem }
+  | { status: "ok"; item: StreamItem; previousType: ItemType; replaced?: string }
   | { status: "not_found" }
   | { status: "unchanged" };
 
 /**
- * Outcome of an update (a light metadata touch — hook and/or deadline):
+ * Outcome of an update (a light metadata touch — the deadline):
  *  - `ok`        — the item was patched in place (no decay reset, no new version).
  *  - `not_found` — no active item matched the given ID.
  */
@@ -27,7 +30,6 @@ export interface AddParams {
   type: ItemType;
   startDate: string;
   deadline: string | null;
-  hook: Hook | null;
 }
 
 /** Fields a restream may change; each omitted field carries over from the old item. */
@@ -36,27 +38,29 @@ export interface RestreamChanges {
   type?: ItemType;
   startDate?: string;
   deadline?: string | null;
-  hook?: Hook | null;
 }
 
-/** The metadata a light-touch update can patch — a subset of a restream's changes. */
-export type UpdateChanges = Pick<RestreamChanges, "hook" | "deadline">;
+/** The metadata a light-touch update can patch. */
+export interface UpdateChanges {
+  deadline: string | null;
+}
 
 export interface StreamBackend {
   add(params: AddParams): Promise<StreamItem>;
 
-  resolve(id: number | string): Promise<StreamItem | null>;
-
-  restream(id: number | string, changes: RestreamChanges): Promise<RestreamResult>;
+  resolve(id: ItemId, outcome: Outcome): Promise<StreamItem | null>;
 
   /**
-   * Patch an item's hook and/or deadline without re-encoding it: no decay-clock
-   * reset, no new version. This is the light-touch counterpart to {@link restream},
-   * which is reserved for genuine content/type re-encodings. Only the fields
-   * present in `changes` are written (a `null` clears; an omitted field is left
-   * as-is).
+   * Re-encode an item and restart its decay clock. The item is rewritten, and
+   * the wording it had moves into its history.
    */
-  update(id: number | string, changes: UpdateChanges): Promise<UpdateResult>;
+  restream(id: ItemId, changes: RestreamChanges): Promise<RestreamResult>;
+
+  /**
+   * Patch an item's deadline without re-encoding it: no decay-clock reset. A
+   * `null` clears it.
+   */
+  update(id: ItemId, changes: UpdateChanges): Promise<UpdateResult>;
 
   query(filters: QueryFilters): Promise<StreamItem[]>;
 }

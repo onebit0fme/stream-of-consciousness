@@ -1,8 +1,23 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { StreamBackend } from "./backend.js";
-import { todayStr, daysBetween, decayDays, decayProgress } from "./utils.js";
-import { ITEM_TYPES, HOOKS } from "./types.js";
+import { todayStr, daysBetween, decayProgress, lineageLabel } from "./utils.js";
+import { DECAY_DAYS, ITEM_TYPES, ItemId, OUTCOMES } from "./types.js";
+
+const itemId = z.union([z.number().int(), z.string()]);
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+function text(value: string) {
+  return { content: [{ type: "text" as const, text: value }] };
+}
+
+function notFound(id: ItemId) {
+  return text(`No active item found with ID ${id}.`);
+}
+
+function days(count: number): string {
+  return `${count} day${count !== 1 ? "s" : ""}`;
+}
 
 export function registerTools(server: McpServer, backend: StreamBackend): void {
   server.tool(
@@ -12,93 +27,54 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       content: z.string().describe("What to add to the stream"),
       type: z
         .enum(ITEM_TYPES)
-        .default("live")
+        .default("run")
         .describe(
-          "Motion-state — how the item moves through attention (James's flights & perchings): " +
-            "live=doing, a foot is already down (would I act on it today?); " +
-            "pull=a known action you keep avoiding — the next step is obvious, you just haven't started; " +
-            "muse=no action exists, but you keep returning to sit with it (it keeps giving); " +
-            "drift=wondering, free exploration with no landing in sight (fading is fine). " +
-            "Default: live."
+          "What attention is doing with the item: " +
+            "run=there is an action and you are on it; " +
+            "drift=wondering, no action in sight (fading is fine). " +
+            "Default: run."
         ),
-      startDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional()
-        .describe("Start date YYYY-MM-DD (default: today)"),
-      deadline: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional()
-        .describe("Hard deadline YYYY-MM-DD (optional)"),
-      hook: z
-        .enum(HOOKS)
-        .nullable()
-        .optional()
-        .describe(
-          "Engagement hook — the intrinsic motivation that makes the item doable; " +
-            "usually left unset. " +
-            "interest=a live, in-the-moment hook (interesting/challenging/novel now); " +
-            "passion=tied to something deeper and lasting (values, identity); " +
-            "none=explicitly no hook."
-        ),
+      startDate: dateStr.optional().describe("Start date YYYY-MM-DD (default: today)"),
+      deadline: dateStr.optional().describe("Hard deadline YYYY-MM-DD (optional)"),
     },
-    async ({ content, type, startDate, deadline, hook }) => {
+    async ({ content, type, startDate, deadline }) => {
       const today = todayStr();
       const item = await backend.add({
         content,
         type,
         startDate: startDate ?? today,
         deadline: deadline ?? null,
-        hook: hook ?? null,
       });
 
-      let text = `Added ${item.type} ${item.displayId}: "${item.content}"`;
-      if (item.deadline) {
-        text += ` (deadline: ${item.deadline})`;
-      }
-      if (item.startDate !== today) {
-        text += ` (starts: ${item.startDate})`;
-      }
-      if (item.hook) {
-        text += ` (hook: ${item.hook})`;
-      }
-      return { content: [{ type: "text" as const, text }] };
+      let out = `Added ${item.type} ${item.displayId}: "${item.content}"`;
+      if (item.deadline) out += ` (deadline: ${item.deadline})`;
+      if (item.startDate !== today) out += ` (starts: ${item.startDate})`;
+      return text(out);
     }
   );
 
   server.tool(
     "stream_resolve",
-    "Resolve (remove) an item from the stream by ID",
+    "Take an item out of the stream by ID",
     {
-      id: z
-        .union([z.number().int(), z.string()])
-        .describe(
-          "ID of the item to resolve (number for file backend, string/short prefix for Todoist)"
-        ),
+      id: itemId.describe(
+        "ID of the item to resolve (number for file backend, string/short prefix for Todoist)"
+      ),
+      outcome: z
+        .enum(OUTCOMES)
+        .default("resolved")
+        .describe("How it left: resolved=done; escaped=dropped. Default: resolved."),
     },
-    async ({ id }) => {
-      const item = await backend.resolve(id);
-      if (!item) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No active item found with ID ${id}.`,
-            },
-          ],
-        };
-      }
-      const today = todayStr();
-      const age = daysBetween(item.startDate, today);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Resolved ${item.displayId}: "${item.content}". It lived in the stream for ${age} day${age !== 1 ? "s" : ""}.`,
-          },
-        ],
-      };
+    async ({ id, outcome }) => {
+      const item = await backend.resolve(id, outcome);
+      if (!item) return notFound(id);
+
+      // startDate moves with every restream, so a life is counted from creation.
+      const age = daysBetween(item.createdAt.slice(0, 10), todayStr());
+      const verb = outcome === "escaped" ? "Escaped" : "Resolved";
+      return text(
+        `${verb} ${item.displayId}: "${item.content}". It lived in the stream for ${days(age)}.`
+      );
     }
   );
 
@@ -113,11 +89,17 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       type: z
         .array(z.enum(ITEM_TYPES))
         .optional()
-        .describe("Filter by motion-state(s): live, pull, muse, drift"),
+        .describe("Filter by type(s): run, drift"),
       status: z
         .enum(["active", "resolved", "all"])
         .default("active")
         .describe("Which items to include (default: active)"),
+      restreamed: z
+        .boolean()
+        .optional()
+        .describe(
+          "true = only items that have been restreamed (with type run these are the pulls, with type drift the muses); false = only items still in their first wording"
+        ),
       decay_min: z
         .number()
         .optional()
@@ -131,72 +113,47 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
         .optional()
         .describe("Items with deadline within N days"),
     },
-    async ({ query, type, status, decay_min, decay_max, deadline_within }) => {
-      const items = await backend.query({
-        query,
-        type,
-        status,
-        decay_min,
-        decay_max,
-        deadline_within,
-      });
-
+    async (filters) => {
+      const items = await backend.query(filters);
       const today = todayStr();
 
-      const filters: string[] = [];
-      if (query) filters.push(`query="${query}"`);
-      if (type && type.length > 0) filters.push(`type=${type.join(",")}`);
-      if (decay_min !== undefined) filters.push(`decay_min=${decay_min}`);
-      if (decay_max !== undefined) filters.push(`decay_max=${decay_max}`);
-      if (deadline_within !== undefined)
-        filters.push(`deadline_within=${deadline_within}`);
-      if (status !== "active") filters.push(`status=${status}`);
-
-      const filterDesc = filters.length > 0 ? filters.join(", ") : "none";
-      const header = `Found ${items.length} item${items.length !== 1 ? "s" : ""} (filters applied: ${filterDesc})`;
-
-      if (items.length === 0) {
-        return { content: [{ type: "text" as const, text: header }] };
-      }
+      const applied = Object.entries(filters)
+        .filter(([key, value]) => value !== undefined && !(key === "status" && value === "active"))
+        .map(([key, value]) => (key === "query" ? `query="${value}"` : `${key}=${value}`));
+      const header = `Found ${items.length} item${items.length !== 1 ? "s" : ""} (filters applied: ${applied.length > 0 ? applied.join(", ") : "none"})`;
+      if (items.length === 0) return text(header);
 
       const lines = items.map((item) => {
         const age = daysBetween(item.startDate, today);
-        const decay = decayDays(item.type);
-        const progress = decayProgress(item, today);
-        const pct = Math.round(progress * 100);
+        const pct = Math.round(decayProgress(item.startDate, today) * 100);
+        const lineage = lineageLabel(item);
+        const type = lineage ? `${item.type}, ${lineage}` : item.type;
 
-        let line = `[${item.displayId}] "${item.content}" (${item.type}) — age: ${age}d, decay: ${age}/${decay} (${pct}%)`;
+        let line = `[${item.displayId}] "${item.content}" (${type}) — age: ${age}d, decay: ${age}/${DECAY_DAYS} (${pct}%)`;
 
         if (item.deadline) {
           const daysLeft = daysBetween(today, item.deadline);
-          line += `, deadline: ${item.deadline} (${daysLeft} day${daysLeft !== 1 ? "s" : ""} ${daysLeft >= 0 ? "left" : "ago"})`;
+          line += `, deadline: ${item.deadline} (${days(daysLeft)} ${daysLeft >= 0 ? "left" : "ago"})`;
         }
 
-        if (item.hook) {
-          line += `, hook: ${item.hook}`;
+        if (item.history.length > 0) {
+          const last = item.history[0];
+          line += `, restreamed ${item.history.length}x, before ${last.date}: "${last.content}"`;
         }
+        if (item.outcome) line += `, ${item.outcome}`;
 
         return line;
       });
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${header}\n${lines.join("\n")}`,
-          },
-        ],
-      };
+      return text(`${header}\n${lines.join("\n")}`);
     }
   );
 
   server.tool(
     "stream_restream",
-    "Resolve an item and create a new version of it — an atomic re-encoding. Requires at least one changed field (content, type, startDate, or deadline); an unchanged restream is rejected — resolve the item instead.",
+    "Re-encode an item and restart its decay clock. The item is rewritten, and the wording it had moves into its history. Requires at least one changed field (content, type, startDate, or deadline); an unchanged restream is rejected — resolve the item instead.",
     {
-      id: z
-        .union([z.number().int(), z.string()])
-        .describe("ID of the active item to resolve and restream"),
+      id: itemId.describe("ID of the active item to restream"),
       content: z
         .string()
         .optional()
@@ -204,126 +161,49 @@ export function registerTools(server: McpServer, backend: StreamBackend): void {
       type: z
         .enum(ITEM_TYPES)
         .optional()
-        .describe("New motion-state (defaults to old item's state)"),
-      startDate: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .optional()
-        .describe("New start date YYYY-MM-DD (defaults to today)"),
-      deadline: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .describe(
+          "New type (defaults to the old item's) — a run may become a drift and a drift a run."
+        ),
+      startDate: dateStr.optional().describe("New start date YYYY-MM-DD (defaults to today)"),
+      deadline: dateStr
         .nullable()
         .optional()
         .describe("New deadline YYYY-MM-DD; pass null to clear an existing deadline; omit to keep the current one"),
-      hook: z
-        .enum(HOOKS)
-        .nullable()
-        .optional()
-        .describe(
-          "New engagement hook (defaults to the old item's hook). Note: changing only the hook does NOT justify a restream — use stream_update for that, so decay isn't reset."
-        ),
     },
-    async ({ id, content, type, startDate, deadline, hook }) => {
-      const result = await backend.restream(id, {
-        content,
-        type,
-        startDate,
-        deadline,
-        hook,
-      });
+    async ({ id, content, type, startDate, deadline }) => {
+      const result = await backend.restream(id, { content, type, startDate, deadline });
 
-      if (result.status === "not_found") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No active item found with ID ${id}.`,
-            },
-          ],
-        };
-      }
-
+      if (result.status === "not_found") return notFound(id);
       if (result.status === "unchanged") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Nothing changed, so ${id} was left as-is — a restream needs a new content, type, start date, or deadline. If it's done, resolve it instead.`,
-            },
-          ],
-        };
+        return text(
+          `Nothing changed, so ${id} was left as-is — a restream needs a new content, type, start date, or deadline. If it's done, resolve it instead.`
+        );
       }
 
-      let text = `Restreamed ${result.old.displayId} -> ${result.new.displayId}: "${result.new.content}"`;
-      if (result.new.type !== result.old.type) text += `, now ${result.new.type}`;
-
-      return {
-        content: [{ type: "text" as const, text }],
-      };
+      const { item, previousType, replaced } = result;
+      let out = `Restreamed ${replaced ? `${replaced} -> ` : ""}${item.displayId}: "${item.content}"`;
+      if (item.type !== previousType) out += `, now ${item.type}`;
+      return text(`${out}. Its decay clock starts over.`);
     }
   );
 
   server.tool(
     "stream_update",
-    "Update an item's hook and/or deadline in place — a light touch that does NOT reset the decay clock or create a new version. Use this to set the engagement hook or adjust a deadline. Reach for stream_restream instead only when the item's content or type genuinely changed (a re-encoding).",
+    "Update an item's deadline in place — a light touch that does NOT reset the decay clock. Reach for stream_restream instead when the item's content or type genuinely changed (a re-encoding).",
     {
-      id: z
-        .union([z.number().int(), z.string()])
-        .describe("ID of the active item to update"),
-      hook: z
-        .enum(HOOKS)
+      id: itemId.describe("ID of the active item to update"),
+      deadline: dateStr
         .nullable()
-        .optional()
-        .describe(
-          "Engagement hook: interest (a live, in-the-moment hook), passion (tied to something deeper/lasting), none (explicitly no hook). Pass null to clear back to unset; omit to leave unchanged."
-        ),
-      deadline: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .nullable()
-        .optional()
-        .describe("New deadline YYYY-MM-DD; pass null to clear; omit to leave unchanged."),
+        .describe("New deadline YYYY-MM-DD; pass null to clear."),
     },
-    async ({ id, hook, deadline }) => {
-      if (hook === undefined && deadline === undefined) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Nothing to update — pass a hook and/or a deadline.",
-            },
-          ],
-        };
-      }
+    async ({ id, deadline }) => {
+      const result = await backend.update(id, { deadline });
+      if (result.status === "not_found") return notFound(id);
 
-      const result = await backend.update(id, { hook, deadline });
-
-      if (result.status === "not_found") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No active item found with ID ${id}.`,
-            },
-          ],
-        };
-      }
-
-      const item = result.item;
-      const parts: string[] = [];
-      if (hook !== undefined) parts.push(`hook ${item.hook ?? "unset"}`);
-      if (deadline !== undefined)
-        parts.push(item.deadline ? `deadline ${item.deadline}` : "deadline cleared");
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Updated ${item.displayId}: ${parts.join(", ")} (decay untouched).`,
-          },
-        ],
-      };
+      const { item } = result;
+      return text(
+        `Updated ${item.displayId}: ${item.deadline ? `deadline ${item.deadline}` : "deadline cleared"} (decay untouched).`
+      );
     }
   );
 }

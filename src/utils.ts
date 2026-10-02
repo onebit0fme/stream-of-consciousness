@@ -1,4 +1,5 @@
-import { DECAY, FileStreamItem } from "./types.js";
+import type { RestreamChanges } from "./backend.js";
+import { DECAY_DAYS, FileStreamItem, PastWording, StreamItem } from "./types.js";
 
 export function todayStr(): string {
   const d = new Date();
@@ -12,13 +13,8 @@ export function daysBetween(a: string, b: string): number {
   return Math.floor((dateB.getTime() - dateA.getTime()) / msPerDay);
 }
 
-export function decayDays(type: string): number {
-  return DECAY[type] ?? 7;
-}
-
-export function decayProgress(item: { startDate: string; type: string }, today: string): number {
-  const age = daysBetween(item.startDate, today);
-  return age / decayDays(item.type);
+export function decayProgress(startDate: string, today: string): number {
+  return daysBetween(startDate, today) / DECAY_DAYS;
 }
 
 /**
@@ -27,10 +23,6 @@ export function decayProgress(item: { startDate: string; type: string }, today: 
  * either omitted or equal to the old value. The automatic startDate refresh to
  * "today" alone doesn't count — an as-is restream just churns the item, so
  * callers should resolve it instead.
- *
- * Hook is deliberately NOT part of this guard: changing only the hook is not a
- * re-encoding, so it must go through `stream_update` (which leaves the decay
- * clock untouched), never a restream.
  */
 export function isUnchangedRestream(
   old: { content: string; type: string; deadline: string | null; startDate: string },
@@ -48,6 +40,54 @@ export function getActiveFileItems(items: FileStreamItem[], today: string): File
   return items.filter(
     (item) => item.resolvedAt === null && item.startDate <= today
   );
+}
+
+export function isRestreamed(item: { history: PastWording[] }): boolean {
+  return item.history.length > 0;
+}
+
+/**
+ * The name a restreamed item goes by: a run that has come round again is
+ * a `pull` (you keep circling the action), a drift that has is a `muse` (you
+ * keep returning to the thought). Neither is a type — both are read off the
+ * item's history.
+ */
+export function lineageLabel(item: {
+  type: string;
+  history: PastWording[];
+}): "pull" | "muse" | null {
+  if (!isRestreamed(item)) return null;
+  return item.type === "run" ? "pull" : "muse";
+}
+
+/**
+ * An item's history after a restream on `date`: the first line of the wording
+ * being replaced goes to the head.
+ */
+export function withPastWording(
+  history: PastWording[],
+  content: string,
+  date: string,
+): PastWording[] {
+  return [{ date, content: content.split("\n", 1)[0] }, ...history];
+}
+
+/**
+ * The fields of an item after a restream on `today`: each change applied, the
+ * decay clock restarted, and the wording being replaced added to its history.
+ */
+export function applyRestream(
+  old: Pick<StreamItem, "type" | "content" | "deadline" | "history">,
+  changes: RestreamChanges,
+  today: string,
+): Pick<StreamItem, "type" | "content" | "deadline" | "startDate" | "history"> {
+  return {
+    type: changes.type ?? old.type,
+    content: changes.content ?? old.content,
+    deadline: changes.deadline !== undefined ? changes.deadline : old.deadline,
+    startDate: changes.startDate ?? today,
+    history: withPastWording(old.history, old.content, today),
+  };
 }
 
 export function nowIso(): string {
